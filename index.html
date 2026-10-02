@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2e9d8">
+  <meta name="description" content="Hand-folded dumplings, made slowly and served steaming hot. Order from Dumpling Lab.">
+  <title>Dumpling Lab | Folded with feeling</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="enhancements.css">
+  <link rel="stylesheet" href="hero-photography.css">
+  <link rel="stylesheet" href="hero-final.css">
+  <link rel="stylesheet" href="hero-detail.css">
+  <link rel="stylesheet" href="hero-motion.css">
+  <link rel="stylesheet" href="hero-parcels.css">
+  <link rel="stylesheet" href="hero-pair.css">
+  <link rel="stylesheet" href="hero-basket.css">
+  <link rel="stylesheet" href="hero-basket-tune.css">
+</head>
+<body>
+  <div class="announcement"><span class="announcement-dot"></span> Hand-folded daily, delivered with love <span class="announcement-right">Cairo, Egypt <span aria-hidden="true">⌄</span></span></div>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Dumpling Lab home"><img class="brand-logo" src="assets/dumpling-lab-logo.svg" alt="Dumpling Lab logo"></a>
+    <nav class="main-nav" aria-label="Main navigation"><a class="nav-active" href="#menu">The menu</a><a href="#story">Our little story</a></nav>
+    <div class="header-actions"><button class="manage-button" id="orders-open" type="button" title="Open restaurant orders"><span aria-hidden="true">▤</span> Orders</button><button class="manage-button" id="manage-toggle" type="button" title="Manage menu"><span aria-hidden="true">⌘</span> <span id="manage-label">Manage</span></button><button class="cart-button" id="cart-open" type="button" aria-label="Open your bag"><span aria-hidden="true">Bag</span><span class="cart-count" id="cart-count">0</span></button></div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy"><div class="eyebrow"><span class="eyebrow-line"></span> A LITTLE POCKET OF HAPPINESS</div><h1 id="hero-title">Good things<br>come <em>folded.</em></h1><p>Soft dough. Slow-simmered fillings. That first warm bite that makes everything else wait a minute.</p><div class="hero-actions"><a href="#menu" class="primary-link">Find your favourites <span aria-hidden="true">↗</span></a><span class="hero-note"><span class="note-star">✳</span> Made fresh to order</span></div><div class="hero-footnote"><span>01 / 03</span><span class="footnote-rule"></span><span>THE ART OF A GOOD DUMPLING</span></div></div>
+      <div class="hero-art" aria-label="Fresh dumplings dropping and bouncing into a bamboo steamer basket">
+        <div class="photo-stage">
+          <img class="hero-food-photo" src="assets/dumpling-scene.jpg" alt="Fresh dumplings and bamboo steamer basket">
+          <div class="falling-dumplings" aria-hidden="true">
+            <span class="falling-dumpling dumpling-one"><img src="assets/dumpling-piece-pleated.jpg" alt=""></span>
+            <span class="falling-dumpling dumpling-two"><img src="assets/dumpling-piece.jpg" alt=""></span>
+            <span class="falling-dumpling dumpling-three"><img src="assets/dumpling-piece-pleated.jpg" alt=""></span>
+            <span class="falling-dumpling dumpling-four"><img src="assets/dumpling-piece.jpg" alt=""></span>
+          </div>
+          <img class="photo-front-lip" src="assets/dumpling-scene.jpg" alt="">
+        </div>
+        <span class="art-caption caption-top">FOLDED FRESH <span>✳</span></span>
+        <span class="art-caption caption-side">FROM OUR KITCHEN<br>WITH LOVE, CAIRO</span>
+        <div class="art-seal">ONE MORE<br><strong>PLEASE</strong><span>✳</span></div>
+      </div>
+      <div class="hero-bottom"><span>HAND-FOLDED IN CAIRO</span><span class="bottom-center">一口幸福 &nbsp; · &nbsp; A BITE OF JOY</span><span>SCROLL TO GET HUNGRY ↓</span></div>
+    </section>
+
+    <section class="menu-section" id="menu">
+      <div class="section-heading"><div><div class="eyebrow dark-eyebrow"><span class="eyebrow-line"></span> THE GOOD STUFF</div><h2>Meet your new <em>usual.</em></h2></div><p>Folded fresh. Steamed slow.<br>Gone before you know it.</p></div>
+      <div class="menu-toolbar"><div class="category-tabs" id="category-tabs" role="group" aria-label="Filter menu categories"></div><button class="add-category-button" id="add-category" type="button" hidden><span aria-hidden="true">+</span> Add category</button><button class="add-category-button" id="add-item" type="button" hidden><span aria-hidden="true">+</span> Add dish</button><span class="menu-count" id="menu-count"></span></div>
+      <div class="product-grid" id="product-grid" aria-live="polite"></div>
+      <div class="menu-empty" id="menu-empty" hidden><span>✳</span><h3>Nothing on the steamer just yet.</h3><p>Try another category, or add a dish in Manage mode.</p></div>
+    </section>
+
+    <section class="story-strip" id="story"><div class="story-mark">慢<br><span>MADE</span></div><div class="story-copy"><div class="eyebrow"><span class="eyebrow-line"></span> A NOTE FROM OUR KITCHEN</div><h2>Some things are worth<br>taking <em>your time over.</em></h2></div><p>Every pleat, every little parcel, folded by hand in our Cairo kitchen. No shortcuts, no sad dumplings. Just the good stuff, made fresh when you order.</p><a href="#menu" aria-label="Back to the menu">↗</a></section>
+  </main>
+
+  <footer class="site-footer"><a class="footer-brand" href="#top">DUMPLING<span>LAB</span></a><span>FOLDED BY HAND IN CAIRO <i>✳</i> EAT THEM WHILE THEY'RE WARM</span><a href="#top">BACK TO THE TOP ↑</a></footer>
+
+  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+  <aside class="cart-drawer" id="cart-drawer" aria-label="Your bag" aria-hidden="true"><div class="drawer-head"><div><span class="eyebrow dark-eyebrow">YOUR LITTLE FEAST</span><h2>Your bag <span id="drawer-count">(0)</span></h2></div><button class="icon-button" id="cart-close" type="button" aria-label="Close bag">×</button></div><div class="cart-lines" id="cart-lines"></div><div class="cart-empty" id="cart-empty"><span>🥟</span><p>Your bag's looking a little<br>too peaceful.</p><a href="#menu" id="empty-menu-link">Let's fix that ↗</a></div><div class="cart-summary" id="cart-summary"><div><span>Subtotal</span><strong id="cart-subtotal">EGP 0</strong></div><small>Delivery calculated when we confirm your order.</small><button class="checkout-button" id="checkout-open" type="button">On to the good part <span>↗</span></button></div></aside>
+
+  <dialog class="app-dialog" id="item-dialog">
+    <form id="item-form">
+      <div class="dialog-head"><div><span class="eyebrow dark-eyebrow">THE MENU, YOUR WAY</span><h2 id="item-dialog-title">Add a dish</h2></div><button class="icon-button dialog-close" type="button" aria-label="Close dialog">×</button></div>
+      <input type="hidden" name="id">
+      <label>Dish name<input name="name" required maxlength="60" placeholder="e.g. Ginger cloud dumplings"></label>
+      <label>Category<select name="category" required></select></label>
+      <label>Price <span class="field-unit">EGP</span><input name="price" type="number" min="1" step="1" required placeholder="180"></label>
+      <label>Description<textarea name="description" maxlength="180" rows="3" placeholder="A little about what's folded inside..."></textarea></label>
+      <label>Image URL<input name="image" type="url" placeholder="https://..."></label>
+      <label class="upload-label">Or choose a photo<input name="imageFile" type="file" accept="image/*"></label>
+      <div class="image-preview" id="image-preview" hidden><img alt="Selected dish preview"><button type="button" id="clear-image">Remove photo</button></div>
+      <div class="dialog-actions"><button class="secondary-button dialog-close" type="button">Cancel</button><button class="primary-button" type="submit">Save dish <span>↗</span></button></div>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog checkout-dialog" id="checkout-dialog"><form id="checkout-form"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">ONE LAST LITTLE THING</span><h2>Where to, friend?</h2></div><button class="icon-button dialog-close" type="button" aria-label="Close dialog">×</button></div><label>Your name<input name="customer" required maxlength="70" autocomplete="name" placeholder="The name on the doorbell"></label><label>Phone number<input name="phone" required type="tel" autocomplete="tel" placeholder="01X XXXX XXXX"></label><label>Delivery address<textarea name="address" required maxlength="240" rows="2" autocomplete="street-address" placeholder="Building, street, area, Cairo"></textarea></label><fieldset class="payment-options"><legend>How would you like to pay?</legend><label class="payment-option"><input name="payment" type="radio" value="Cash on delivery" checked><span class="payment-icon">١</span><span><strong>Cash on delivery</strong><small>Pay when your dumplings arrive</small></span><span class="radio-mark"></span></label><label class="payment-option"><input name="payment" type="radio" value="InstaPay"><span class="payment-icon">↗</span><span><strong>InstaPay</strong><small>We’ll share transfer details after you order</small></span><span class="radio-mark"></span></label></fieldset><div class="checkout-total"><span>Order subtotal</span><strong id="checkout-total">EGP 0</strong></div><button class="primary-button submit-order" type="submit">Place my order <span>↗</span></button><p class="checkout-note">We’ll call to confirm your order and delivery fee.</p></form></dialog>
+
+  <dialog class="app-dialog orders-dialog" id="orders-dialog"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">THE KITCHEN LEDGER</span><h2>Restaurant orders</h2></div><button class="icon-button" id="orders-close" type="button" aria-label="Close orders">×</button></div><form class="staff-auth" id="staff-auth-form"><label>Staff access token<input name="token" type="password" autocomplete="current-password" required placeholder="Enter the token from the server console"></label><button class="primary-button" type="submit">Open order book <span>↗</span></button><p class="checkout-note" id="staff-auth-message">Orders and customer details are private to staff.</p></form><div class="orders-content" id="orders-content" hidden><div class="order-stats"><div><span>Orders</span><strong id="order-stat-count">0</strong></div><div><span>Active earnings</span><strong id="order-stat-earnings">EGP 0</strong></div><div><span>Awaiting action</span><strong id="order-stat-new">0</strong></div></div><div class="orders-toolbar"><span id="orders-last-updated">Live order inbox</span><button class="add-category-button" id="orders-refresh" type="button">Refresh</button><button class="primary-button export-orders" id="orders-export" type="button">Export CSV <span>↓</span></button></div><div class="orders-list" id="orders-list"></div></div></dialog>
+
+  <dialog class="app-dialog success-dialog" id="success-dialog"><div class="success-content"><span class="success-stamp">✳</span><div class="eyebrow dark-eyebrow">IT'S OFFICIALLY HAPPENING</div><h2>Your dumplings<br>are <em>on their way.</em></h2><p id="order-confirmation"></p><div class="instapay-details" id="instapay-details" hidden><strong>Pay with InstaPay</strong><p>Transfer to <b>@dumplinglab</b> and keep the transaction reference. We'll confirm your order by phone.</p></div><button class="primary-button" id="success-close" type="button">Lovely, thank you <span>↗</span></button></div></dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
