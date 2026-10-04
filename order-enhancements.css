@@ -1,0 +1,41 @@
+.orders-dialog{width:min(850px,calc(100% - 28px));max-height:min(90vh,900px)}
+.staff-auth{max-width:460px}
+.staff-auth[hidden],.orders-content[hidden]{display:none}
+.staff-auth .primary-button{width:100%}
+.order-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:17px}
+.order-stats>div{padding:13px;border:1px solid var(--line);background:#f8f2e8}
+.order-stats span,.order-stats strong{display:block}
+.order-stats span{color:#786f63;font-size:9px}
+.order-stats strong{margin-top:6px;color:var(--red);font:600 17px var(--serif)}
+.orders-toolbar{display:flex;align-items:center;gap:9px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);color:#786f63;font-size:9px}
+.orders-toolbar>span{margin-right:auto}
+.export-orders{height:32px;min-width:100px;font-size:9px}
+.orders-list{max-height:48vh;overflow:auto}
+.order-card{padding:14px 2px;border-bottom:1px solid var(--line)}
+.order-card-head,.order-card-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.order-card-head>div{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.order-id{color:var(--red);font-size:11px;font-weight:700}
+.order-card time,.notification-state{color:#867b6e;font-size:9px}
+.order-card-head>strong{font-size:12px}
+.order-customer{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin-top:9px;font-size:10px}
+.order-customer>a{color:var(--red)}
+.order-customer>span{grid-column:1/-1;color:#766d61}
+.order-items{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.order-items>span{padding:5px 7px;background:#eee5d7;color:#62594d;font-size:9px}
+.order-items>.order-payment{background:#f7f0e4;color:#986d34}
+.order-card-foot{margin-top:11px}
+.order-card-foot label{display:flex;align-items:center;gap:8px;color:#756b5f;font-size:9px}
+.order-card-foot select{padding:6px;border:1px solid #d4c6b1;background:#fffdf8;color:var(--ink);font-size:9px}
+.orders-empty{padding:35px 12px;text-align:center;color:#786f63;font:500 17px var(--serif)}
+@media(max-width:650px){
+  .order-stats{gap:5px}
+  .order-stats>div{padding:10px 7px}
+  .order-stats span{font-size:8px}
+  .order-stats strong{font-size:13px}
+  .orders-toolbar{flex-wrap:wrap}
+  .orders-toolbar>span{width:100%}
+  .orders-toolbar .add-category-button{margin-left:auto}
+  .order-customer{grid-template-columns:1fr}
+  .order-customer>a,.order-customer>span{grid-column:1}
+  .orders-list{max-height:44vh}
+}
