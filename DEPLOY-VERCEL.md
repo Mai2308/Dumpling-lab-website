@@ -14,7 +14,7 @@ Push the current project to a GitHub repository. Confirm the repository includes
 
 1. Create a MongoDB Atlas account and a project, then create an Atlas Free cluster.
 2. Create a database user with a strong, unique password. This is different from the Atlas website login.
-3. Configure Network Access. Vercel's default function egress uses dynamic IPs, so a fixed-IP allowlist is not generally available on the free setup. For a demo, Atlas may need `0.0.0.0/0`; enable database authentication, use a database user limited to this project's database, and never expose the URI in client-side code. If your Vercel/Atlas integration provides a supported private or managed connection, prefer it.
+3. Configure Network Access. Vercel's default function egress uses dynamic IPs, so a fixed-IP allowlist is not generally available on the free setup. For a **non-commercial demo only**, Atlas may need an IP access-list entry of `0.0.0.0/0` (allow connections from any IPv4 address). This increases exposure: use a strong, unique database-user password, grant that user access only to this application's database, keep the URI in Vercel server-side environment variables, and never expose it in browser code. If your Vercel/Atlas integration provides a supported private or managed connection, prefer it. Do not use a broad allowlist for a production service; use a hosting connection with fixed egress or an appropriate private connection.
 4. Copy the Atlas driver connection string. Replace its username/password placeholders; URL-encode reserved characters in the database password. The app defaults to the `dumpling_lab` database, which can be overridden with `MONGODB_DB`.
 
 Atlas Free clusters are intended for small-scale learning and development; review [current Atlas Free limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/) before using one.
@@ -66,7 +66,22 @@ Paste the generated values directly into Vercel's encrypted environment-variable
 
 If the homepage, CSS, image, and API all show the Vercel function error, redeploy the latest commit with the repository's `vercel.json` and `scripts/prepare-vercel.mjs`. This build explicitly separates static website files into `public/` from the API function; it prevents Vercel from treating the local SQLite server as the handler for every URL.
 
-If only `/api/*` requests fail after redeploying, open **Vercel Dashboard → Project → Logs → Functions**, filter to the failed request, and check the error. Common configuration issues are missing `MONGODB_URI` or a `JWT_SECRET` shorter than 32 characters. For an Atlas network error, verify the database user, connection string, and Atlas Network Access allowlist. Never paste credentials into an issue or chat.
+If only `/api/*` requests fail after redeploying, open **Vercel Dashboard → Project → Logs → Functions**, filter to the failed request, and check the error. Common configuration issues are missing `MONGODB_URI` or a `JWT_SECRET` shorter than 32 characters.
+
+### Atlas TLS alert or `MongoServerSelectionError`
+
+An error during `MongoClient.connect()` such as `tlsv1 alert internal error`, `ReplicaSetNoPrimary`, or `MongoServerSelectionError` occurs before the application can query MongoDB. Check these items in order:
+
+1. In Atlas, confirm the cluster is **available/running**, not paused, still provisioning, or deleted. Free clusters can pause after extended inactivity.
+2. In **Security → Network Access** for the same Atlas project, confirm the Vercel demo can reach the cluster. If the allowlist contains only your home IP, Vercel's function request will not use that IP. For a personal demo where Atlas requires it, add `0.0.0.0/0`, save, and wait until Atlas reports the entry as active. This opens network access broadly, so protect the cluster with a strong database password and least-privilege database user; remove the entry if no longer needed. Do not treat this broad rule as suitable production security.
+3. In **Database Access**, verify that a MongoDB **database user** exists and is enabled. This is not the Atlas website login.
+4. In **Vercel → Project → Settings → Environment Variables**, verify `MONGODB_URI` is the current **Drivers / Node.js** connection string copied from the same cluster. Use the database user's username/password, URL-encode reserved characters in both if present, and remove surrounding quotation marks or accidental spaces. Never paste the URI into chat or logs.
+5. Verify the environment variable is enabled for the deployment environment you are testing (Production vs Preview). After any variable change, trigger a **new deployment**; existing deployments do not receive changed values.
+6. Open `/api/menu` on the newly deployed site. If it still fails after the cluster is active and the allowlist/user/URI are confirmed, inspect the new Vercel Function log and the Atlas project's connection/alert logs. Do not disable TLS or add `tlsAllowInvalidCertificates`; Atlas requires certificate validation.
+
+For authentication failures, regenerate a password for the database user, update the Vercel `MONGODB_URI`, and redeploy. A wrong database username/password normally produces an authentication error after the TLS connection, rather than this TLS alert.
+
+Never paste credentials into an issue or chat.
 
 ## Admin account behavior
 
