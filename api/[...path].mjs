@@ -409,6 +409,7 @@ async function sendTelegramNotification(order) {
 
 async function sendRestaurantNotification(order, orders) {
   const sent = [];
+  const failures = [];
   const webhookURL = process.env.RESTAURANT_WEBHOOK_URL;
   if (webhookURL) {
     try {
@@ -422,29 +423,36 @@ async function sendRestaurantNotification(order, orders) {
       sent.push('Webhook');
     } catch (error) {
       console.error('Restaurant webhook failed:', error.message);
+      failures.push(`webhook: ${error.message}`);
     }
   }
 
   try {
     if (await sendTelegramNotification(order)) sent.push('Telegram');
+    else if (process.env.TELEGRAM_BOT_TOKEN?.trim() && process.env.TELEGRAM_CHAT_ID?.trim()) failures.push('telegram: unexpected response');
   } catch (error) {
     console.error('Telegram notification failed:', error.message);
+    failures.push(`telegram: ${error.message}`);
   }
 
   try {
     if (await sendEmailNotification(order, 'store')) sent.push('Store email');
   } catch (error) {
     console.error('Store email notification failed:', error.message);
+    failures.push(`store email: ${error.message}`);
   }
 
   try {
     if (order.email && await sendEmailNotification(order, 'customer')) sent.push('Customer email');
+    else if (!order.email) failures.push('customer email: no address given');
   } catch (error) {
     console.error('Customer email notification failed:', error.message);
+    failures.push(`customer email: ${error.message}`);
   }
 
   const notificationStatus = sent.length ? sent.join(', ') : 'Inbox only';
-  await orders.updateOne({ id: order.id }, { $set: { notificationStatus, notification_status: notificationStatus } });
+  const statusLine = failures.length ? `${notificationStatus} · failed: ${failures.join('; ')}` : notificationStatus;
+  await orders.updateOne({ id: order.id }, { $set: { notificationStatus, notification_status: statusLine } });
 }
 
 async function handleApi(request, response, db, url) {
@@ -535,9 +543,22 @@ async function handleApi(request, response, db, url) {
 
   if (pathname === '/api/orders.csv' && method === 'GET') {
     await verifyAdmin(request, users);
-    const allOrders = await orders.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    const month = url.searchParams.get('month');
+    let monthStart = null;
+    let monthEnd = null;
+    let monthName = 'all months';
+    if (month) {
+      const match = month.match(/^(\d{4})-(\d{2})$/);
+      if (!match) throw httpError(400, 'Choose a valid month in YYYY-MM format.');
+      monthStart = new Date(`${match[1]}-${match[2]}-01T00:00:00.000Z`);
+      monthEnd = new Date(monthStart.getTime());
+      monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
+      monthName = monthStart.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    }
+    const query = monthStart ? { createdAt: { $gte: monthStart.toISOString(), $lt: monthEnd.toISOString() } } : {};
+    const allOrders = await orders.find(query, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    response.setHeader('Content-Disposition', 'attachment; filename="dumpling-lab-orders.csv"');
+    response.setHeader('Content-Disposition', `attachment; filename="dumpling-lab-orders${month ? `-${month}` : ''}.csv"`);
     response.setHeader('Cache-Control', 'no-store');
     response.status(200).send(ordersCsv(allOrders));
     return;

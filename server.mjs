@@ -181,11 +181,25 @@ async function handleApi(request, response, url) {
   }
   if (pathname === '/api/orders.csv' && method === 'GET') {
     verifyAdmin(request);
+    const month = url.searchParams.get('month');
+    let filtered = listOrders();
+    let filenameSuffix = '';
+    if (month) {
+      const match = month.match(/^(\d{4})-(\d{2})$/);
+      if (!match) throw httpError(400, 'Choose a valid month in YYYY-MM format.');
+      const monthStart = new Date(`${match[1]}-${match[2]}-01T00:00:00.000Z`);
+      const monthEnd = new Date(monthStart.getTime());
+      monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
+      const startIso = monthStart.toISOString();
+      const endIso = monthEnd.toISOString();
+      filtered = filtered.filter(order => order.createdAt >= startIso && order.createdAt < endIso);
+      filenameSuffix = `-${month}`;
+    }
     response.writeHead(200, {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="dumpling-lab-orders.csv"',
+      'Content-Disposition': `attachment; filename="dumpling-lab-orders${filenameSuffix}.csv"`,
       'Cache-Control': 'no-store'
-    }).end(ordersCSV(listOrders()));
+    }).end(ordersCSV(filtered));
     return true;
   }
 

@@ -363,14 +363,17 @@ function renderOrders() {
 
 byId('orders-export').addEventListener('click', async () => {
   try {
-    const response = await fetch('/api/orders.csv', { headers: { Authorization: `Bearer ${state.authToken}` } });
+    const month = byId('orders-month').value;
+    const query = month ? `?month=${encodeURIComponent(month)}` : '';
+    const response = await fetch(`/api/orders.csv${query}`, { headers: { Authorization: `Bearer ${state.authToken}` } });
     if (!response.ok) throw new Error('Could not export orders. Sign in again.');
     const blob = await response.blob();
     const download = document.createElement('a');
     download.href = URL.createObjectURL(blob);
-    download.download = 'dumpling-lab-orders.csv';
+    download.download = `dumpling-lab-orders${month ? `-${month}` : ''}.csv`;
     download.click();
     URL.revokeObjectURL(download.href);
+    showToast(month ? `Exported orders for ${month}.` : 'Exported all orders.');
   } catch (error) { showToast(error.message); }
 });
 
