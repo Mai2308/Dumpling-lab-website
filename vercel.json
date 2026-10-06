@@ -15,6 +15,10 @@
     {
       "source": "/api/:first/:path*",
       "destination": "/api/dispatch?route=:first/:path*"
+    },
+    {
+      "source": "/api/:first",
+      "destination": "/api/dispatch?route=:first"
     }
   ]
 }

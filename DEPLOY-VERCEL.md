@@ -27,7 +27,7 @@ The app sends admin-authorized uploads through its API to Cloudinary. In the Clo
 
 1. Sign in to Vercel and import the GitHub repository.
 2. Keep the repository root as the project root. The checked-in `vercel.json` disables framework autodetection, runs the explicit build command, and sets `public/` as the static output. The build copies only frontend files into `public/`; it does not publish `server.mjs` or project secrets.
-3. `api/[...path].mjs` handles single-segment API paths. The `vercel.json` rewrite forwards nested `/api/*/*` paths (login, signup, item/offer changes, and order status) to `api/dispatch.mjs`, which reuses the same validated handler. The original `server.mjs` continues to power local SQLite development only.
+3. The `vercel.json` rewrites forward both single-segment (`/api/menu`, `/api/offers`, `/api/uploads`) and nested paths (login, signup, item/offer changes, and order status) to `api/dispatch.mjs`, which reuses the same validated handler. The original `server.mjs` continues to power local SQLite development only.
 4. Add these environment variables in the Vercel project settings for **Preview** and **Development**. Add them for **Production** only if using a plan permitted for the intended use:
 
 | Variable | Value |
@@ -66,7 +66,7 @@ Paste the generated values directly into Vercel's encrypted environment-variable
 
 If the homepage, CSS, image, and API all show the Vercel function error, redeploy the latest commit with the repository's `vercel.json` and `scripts/prepare-vercel.mjs`. This build explicitly separates static website files into `public/` from the API function; it prevents Vercel from treating the local SQLite server as the handler for every URL.
 
-If single-segment endpoints such as `/api/menu` work but nested ones such as `/api/auth/login` return Vercel's plain-text `NOT_FOUND`, redeploy the rewrite from the latest `vercel.json`. It routes the nested request to the dispatch function. To test login routing without creating an account, submit deliberately invalid credentials; the API should return JSON `401`, not a platform `404`.
+If API routes such as `/api/menu`, `/api/offers`, or `/api/uploads` return `Not found`, redeploy the latest `vercel.json`. Its two rewrites send both single-segment and nested routes to the dispatch function. To test signup/login routing without creating an account, submit deliberately invalid credentials; the API should return a JSON validation/auth error, not a platform 404.
 
 If function requests fail after deployment, open **Vercel Dashboard → Project → Logs → Functions**, filter to the failed request, and check the error. Common configuration issues are missing `MONGODB_URI` or a `JWT_SECRET` shorter than 32 characters.
 
