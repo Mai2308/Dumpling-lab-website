@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "vercel-build": "node --check \"api/[...path].mjs\""
+    "vercel-build": "node --check \"api/[...path].mjs\" && node scripts/prepare-vercel.mjs"
   },
   "engines": {
     "node": ">=22.5.0"

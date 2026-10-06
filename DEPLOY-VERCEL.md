@@ -26,8 +26,8 @@ The app sends admin-authorized uploads through its API to Cloudinary. In the Clo
 ## 4. Import the project into Vercel
 
 1. Sign in to Vercel and import the GitHub repository.
-2. Select **Other** as the framework preset if Vercel does not detect it automatically. Keep the repository root as the project root.
-3. Use `npm run vercel-build` as the build command. The static HTML/CSS/JavaScript assets are served from the repository; `api/[...path].mjs` is deployed as a Node.js function for `/api/*`.
+2. Keep the repository root as the project root. The checked-in `vercel.json` disables framework autodetection, runs the explicit build command, and sets `public/` as the static output. The build copies only frontend files into `public/`; it does not publish `server.mjs` or project secrets.
+3. `api/[...path].mjs` is deployed as a Node.js Function for `/api/*`. The original `server.mjs` continues to power local SQLite development only.
 4. Add these environment variables in the Vercel project settings for **Preview** and **Development**. Add them for **Production** only if using a plan permitted for the intended use:
 
 | Variable | Value |
@@ -61,6 +61,12 @@ Paste the generated values directly into Vercel's encrypted environment-variable
 
 5. Deploy. Vercel provides a preview URL. Test customer signup/login, admin login, menu display, and a test order with non-real details. Verify admin menu edits and photo uploads; uploaded image URLs should use Cloudinary.
 6. Remember: **Hobby is for non-commercial demos only.** Do not publish this preview as the live business storefront or collect real customer order/contact information under that plan.
+
+## Troubleshooting Vercel's `FUNCTION_INVOCATION_FAILED`
+
+If the homepage, CSS, image, and API all show the Vercel function error, redeploy the latest commit with the repository's `vercel.json` and `scripts/prepare-vercel.mjs`. This build explicitly separates static website files into `public/` from the API function; it prevents Vercel from treating the local SQLite server as the handler for every URL.
+
+If only `/api/*` requests fail after redeploying, open **Vercel Dashboard → Project → Logs → Functions**, filter to the failed request, and check the error. Common configuration issues are missing `MONGODB_URI` or a `JWT_SECRET` shorter than 32 characters. For an Atlas network error, verify the database user, connection string, and Atlas Network Access allowlist. Never paste credentials into an issue or chat.
 
 ## Admin account behavior
 
