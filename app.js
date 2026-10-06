@@ -1,5 +1,5 @@
 const STORAGE_KEYS = { authToken: 'dumpling-lab-auth-token' };
-const starterCategories = ['Dumplings', 'Noodles', 'Sauces', 'Beverages'];
+const starterCategories = ['Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages'];
 const dumplingStyles = ['Steamed', 'Pan-fried', 'Crispy skirt'];
 const starterItems = [
   { id: 'item-1', name: 'Ginger cloud', category: 'Dumplings', price: 185, description: 'Chicken, fresh ginger, and a little spring onion tucked into soft, silky wrappers.', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=900&q=85', tag: 'HOUSE FAVOURITE' },
@@ -235,6 +235,7 @@ function openItemDialog(id = null) {
   form.elements.category.value = item?.category ?? state.categories[0];
   form.elements.price.value = item?.price ?? '';
   form.elements.description.value = item?.description ?? '';
+  form.elements.tag.value = item?.tag ?? '';
   form.elements.image.value = item?.image?.startsWith('data:') ? '' : item?.image ?? '';
   form.elements.imageFile.value = '';
   byId('item-dialog-title').textContent = item ? 'Edit this dish' : 'Add a dish';
@@ -265,7 +266,7 @@ byId('item-form').addEventListener('submit', async event => {
       });
       image = (await apiRequest('/api/uploads', { method: 'POST', body: JSON.stringify({ dataUrl }) })).image;
     }
-    const item = { id, name: form.elements.name.value.trim(), category: form.elements.category.value, price: Number(form.elements.price.value), description: form.elements.description.value.trim(), image, tag: previous?.tag || 'FOLDED FRESH' };
+    const item = { id, name: form.elements.name.value.trim(), category: form.elements.category.value, price: Number(form.elements.price.value), description: form.elements.description.value.trim(), image, tag: form.elements.tag.value.trim().toUpperCase() || previous?.tag || 'FOLDED FRESH' };
     const result = await apiRequest(previous ? `/api/menu/${encodeURIComponent(id)}` : '/api/menu', { method: previous ? 'PUT' : 'POST', body: JSON.stringify(item) });
     state.items = previous ? state.items.map(entry => entry.id === id ? result.item : entry) : [...state.items, result.item];
     byId('item-dialog').close(); renderMenu(); renderCart();

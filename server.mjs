@@ -11,7 +11,7 @@ const scrypt = promisify(scryptCallback);
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const dataDirectory = resolve(process.env.DATA_DIRECTORY || resolve(root, 'data'));
 const uploadDirectory = resolve(dataDirectory, 'uploads');
-const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Beverages'];
+const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages'];
 const dumplingStyles = ['Steamed', 'Pan-fried', 'Crispy skirt'];
 mkdirSync(uploadDirectory, { recursive: true });
 
@@ -230,7 +230,7 @@ async function handleApi(request, response, url) {
   const categoryMatch = pathname.match(/^\/api\/categories\/([^/]+)$/);
   if (categoryMatch && method === 'DELETE') {
     verifyAdmin(request);
-    throw httpError(400, 'The menu categories are fixed: Dumplings, Noodles, Sauces, and Beverages.');
+    throw httpError(400, 'The menu categories are fixed: Dumplings, Noodles, Sauces, Tteokpokki, and Beverages.');
   }
 
   if (pathname === '/api/menu' && method === 'POST') {
@@ -437,7 +437,7 @@ function migrateMenuCategories() {
         ELSE 'Dumplings'
       END
     `);
-    database.exec("DELETE FROM categories WHERE name NOT IN ('Dumplings', 'Noodles', 'Sauces', 'Beverages')");
+    database.exec("DELETE FROM categories WHERE name NOT IN ('Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages')");
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');
@@ -472,7 +472,7 @@ function validateCategory(body) {
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const canonicalName = menuCategories.find(category => category.toLowerCase() === name.toLowerCase());
   if (!canonicalName) {
-    throw httpError(400, 'Choose one of the fixed menu categories: Dumplings, Noodles, Sauces, or Beverages.');
+    throw httpError(400, 'Choose one of the fixed menu categories: Dumplings, Noodles, Sauces, Tteokpokki, or Beverages.');
   }
   return { name: canonicalName };
 }
@@ -491,7 +491,7 @@ function validateMenuItem(body, existingId = null) {
     tag: clean(body.tag, 50)
   };
   if (!item.id || !item.name || !item.category || !Number.isSafeInteger(item.price) || item.price < 0 || item.price > 1_000_000) throw httpError(400, 'Provide a valid dish ID, name, category, and whole-number price.');
-  if (!item.category) throw httpError(400, 'Choose Dumplings, Noodles, Sauces, or Beverages.');
+  if (!item.category) throw httpError(400, 'Choose Dumplings, Noodles, Sauces, Tteokpokki, or Beverages.');
   if (item.image && !/^(https:\/\/|\/uploads\/)[^\s]+$/i.test(item.image)) throw httpError(400, 'Dish photos must use HTTPS or a server-uploaded image.');
   return item;
 }
@@ -509,7 +509,7 @@ function validateOffer(body, existingId = null) {
 }
 
 function listCategories() {
-  return database.prepare("SELECT name FROM categories WHERE name IN ('Dumplings', 'Noodles', 'Sauces', 'Beverages') ORDER BY CASE name WHEN 'Dumplings' THEN 1 WHEN 'Noodles' THEN 2 WHEN 'Sauces' THEN 3 WHEN 'Beverages' THEN 4 END").all().map(row => row.name);
+  return database.prepare("SELECT name FROM categories WHERE name IN ('Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages') ORDER BY CASE name WHEN 'Dumplings' THEN 1 WHEN 'Noodles' THEN 2 WHEN 'Sauces' THEN 3 WHEN 'Tteokpokki' THEN 4 WHEN 'Beverages' THEN 5 END").all().map(row => row.name);
 }
 
 function listMenuItems() {

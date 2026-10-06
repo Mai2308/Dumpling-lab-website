@@ -4,7 +4,7 @@ import { MongoClient } from 'mongodb';
 import { createTransport } from 'nodemailer';
 
 const scrypt = promisify(scryptCallback);
-const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Beverages'];
+const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages'];
 const dumplingStyles = ['Steamed', 'Pan-fried', 'Crispy skirt'];
 const orderStatuses = ['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'];
 const paymentMethods = ['Cash on delivery', 'InstaPay'];
@@ -580,14 +580,14 @@ async function handleApi(request, response, db, url) {
   if (pathname === '/api/categories' && method === 'POST') {
     await verifyAdmin(request, users);
     const name = typeof body.name === 'string' ? menuCategories.find(category => category.toLowerCase() === body.name.trim().toLowerCase()) : null;
-    if (!name) throw httpError(400, 'Choose one of the fixed menu categories: Dumplings, Noodles, Sauces, or Beverages.');
+    if (!name) throw httpError(400, 'Choose one of the fixed menu categories: Dumplings, Noodles, Sauces, Tteokpokki, or Beverages.');
     throw httpError(409, 'That category already exists.');
     return;
   }
 
   if (/^\/api\/categories\/[^/]+$/.test(pathname) && method === 'DELETE') {
     await verifyAdmin(request, users);
-    throw httpError(400, 'The menu categories are fixed: Dumplings, Noodles, Sauces, and Beverages.');
+    throw httpError(400, 'The menu categories are fixed: Dumplings, Noodles, Sauces, Tteokpokki, and Beverages.');
   }
 
   if (pathname === '/api/menu' && method === 'POST') {
