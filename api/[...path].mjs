@@ -543,7 +543,7 @@ async function handleApi(request, response, db, url) {
   throw httpError(404, 'Not found.');
 }
 
-export default async function handler(request, response) {
+export async function handleRequest(request, response, routePath) {
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Referrer-Policy', 'same-origin');
   response.setHeader('Cache-Control', 'no-store');
@@ -554,6 +554,7 @@ export default async function handler(request, response) {
   try {
     const db = await initialize();
     const url = new URL(request.url || '/', `https://${request.headers.host || 'localhost'}`);
+    if (routePath) url.pathname = `/api/${routePath}`;
     await handleApi(request, response, db, url);
   } catch (error) {
     const status = error.statusCode || 500;
@@ -564,4 +565,8 @@ export default async function handler(request, response) {
     }
     sendJson(response, status, { error: status >= 500 ? 'The request could not be processed.' : error.message });
   }
+}
+
+export default function handler(request, response) {
+  return handleRequest(request, response);
 }

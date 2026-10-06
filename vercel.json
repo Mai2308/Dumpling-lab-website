@@ -6,6 +6,15 @@
   "functions": {
     "api/[...path].mjs": {
       "maxDuration": 15
+    },
+    "api/dispatch.mjs": {
+      "maxDuration": 15
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:first/:path*",
+      "destination": "/api/dispatch?route=:first/:path*"
+    }
+  ]
 }
