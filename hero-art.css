@@ -1,0 +1,144 @@
+.hero {
+  grid-template-columns: 1.05fr .95fr;
+  padding-left: 8%;
+  padding-right: 8%;
+}
+
+.hero .hero-copy h1 em {
+  color: #f2c744;
+}
+
+.hero .hero-art {
+  position: relative;
+  z-index: 0;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 -5% 0 0;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.hero-art::before {
+  position: absolute;
+  z-index: -1;
+  inset: 8% -6%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(235, 155, 82, .18), rgba(124, 39, 39, .08) 48%, transparent 72%);
+  content: "";
+}
+
+.hero-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.falling-dumpling {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dumpling-drift 5.5s ease-in-out infinite alternate;
+}
+
+.dumpling-two {
+  animation-delay: -2.1s;
+  animation-duration: 6.4s;
+}
+
+.dumpling-three {
+  animation-delay: -3.8s;
+  animation-duration: 5.9s;
+}
+
+.dumpling-four {
+  animation-delay: -1.2s;
+  animation-duration: 6.8s;
+}
+
+.steam {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: steam-rise 7s ease-in-out infinite alternate;
+}
+
+.steam-two {
+  animation-delay: -3.5s;
+  animation-duration: 8.5s;
+}
+
+.hero-art-note {
+  position: absolute;
+  top: 20%;
+  right: 1%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 243, 224, .8);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .15em;
+}
+
+.hero-art-note span {
+  color: #f2c744;
+  font-size: 14px;
+}
+
+@keyframes dumpling-drift {
+  from { translate: 0 -7px; }
+  to { translate: 0 9px; }
+}
+
+@keyframes steam-rise {
+  from { translate: 0 7px; opacity: .7; }
+  to { translate: 0 -8px; opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hero .hero-art {
+    margin-right: -7%;
+  }
+}
+
+@media (max-width: 650px) {
+  .hero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding-bottom: 70px;
+  }
+
+  .hero .hero-art {
+    grid-row: 2;
+    width: min(100%, 410px);
+    height: auto;
+    aspect-ratio: 560 / 520;
+    justify-self: center;
+    margin: -20px 0 0;
+  }
+
+  .hero .hero-copy h1 {
+    margin: 18px 0 14px;
+    font-size: clamp(40px, 13vw, 54px);
+    letter-spacing: -.8px;
+  }
+
+  .hero-art-note {
+    top: 10%;
+    right: 3%;
+    font-size: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .falling-dumpling,
+  .steam {
+    animation: none;
+  }
+}

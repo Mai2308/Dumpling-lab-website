@@ -12,27 +12,121 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="order-enhancements.css">
   <link rel="stylesheet" href="hero-copy.css">
+  <link rel="stylesheet" href="offers.css">
+  <link rel="stylesheet" href="menu-customization.css">
+  <link rel="stylesheet" href="hero-art.css">
 </head>
 <body>
   <div class="announcement"><span class="announcement-dot"></span> Hand-folded daily, delivered with love <span class="announcement-right">Cairo, Egypt <span aria-hidden="true">⌄</span></span></div>
   <header class="site-header">
-    <a class="brand brand-wordmark" href="#top" aria-label="Dumpling Lab home">DUMPLING <span>LAB</span></a>
+    <a class="brand brand-wordmark" href="#top" aria-label="Dumpling Lab home">DUMPLING<span>LAB</span></a>
     <nav class="main-nav" aria-label="Main navigation"><a class="nav-active" href="#menu">The menu</a><a href="#story">Our little story</a></nav>
-    <div class="header-actions"><button class="manage-button" id="orders-open" type="button" title="Open restaurant orders"><span aria-hidden="true">▤</span> Orders</button><button class="manage-button" id="manage-toggle" type="button" title="Manage menu"><span aria-hidden="true">⌘</span> <span id="manage-label">Manage</span></button><button class="cart-button" id="cart-open" type="button" aria-label="Open your bag"><span aria-hidden="true">Bag</span><span class="cart-count" id="cart-count">0</span></button><a class="hero-order-button" href="#menu">ORDER NOW <span aria-hidden="true">↗</span></a></div>
+    <div class="header-actions"><button class="manage-button" id="orders-open" type="button" title="Open restaurant orders" hidden><span aria-hidden="true">▤</span> Orders</button><button class="manage-button" id="manage-toggle" type="button" title="Manage menu" hidden><span aria-hidden="true">⌘</span> <span id="manage-label">Manage</span></button><button class="manage-button" id="account-open" type="button">Sign in</button><button class="cart-button" id="cart-open" type="button" aria-label="Open your bag"><span aria-hidden="true">Bag</span><span class="cart-count" id="cart-count">0</span></button><a class="hero-order-button" href="#menu">ORDER NOW <span aria-hidden="true">↗</span></a></div>
   </header>
 
   <main id="top">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy"><div class="eyebrow"><span class="eyebrow-line"></span> A LITTLE POCKET OF HAPPINESS</div><h1 id="hero-title">Good things<br>come <em>folded.</em></h1><p>Soft dough. Slow-simmered fillings. That first warm bite that makes everything else wait a minute.</p><div class="hero-actions"><a href="#menu" class="primary-link">Find your favourites <span aria-hidden="true">↗</span></a><span class="hero-note"><span class="note-star">✳</span> Made fresh to order</span></div><div class="hero-footnote"><span>01 / 03</span><span class="footnote-rule"></span><span>THE ART OF A GOOD DUMPLING</span></div></div>
+      <figure class="hero-art" aria-label="Illustration of dumplings drifting down through steam into a bamboo basket">
+        <svg class="hero-scene" viewBox="0 0 560 520" role="img" aria-labelledby="hero-scene-title hero-scene-description">
+          <title id="hero-scene-title">A little pocket of happiness</title>
+          <desc id="hero-scene-description">Golden dumplings float gently down through wisps of steam toward a warm bamboo steamer.</desc>
+          <defs>
+            <radialGradient id="scene-glow">
+              <stop offset="0" stop-color="#efb55b" stop-opacity=".2"/>
+              <stop offset="1" stop-color="#efb55b" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="dough" x1=".18" y1="0" x2=".78" y2="1">
+              <stop offset="0" stop-color="#fff0cc"/>
+              <stop offset=".55" stop-color="#e9bd79"/>
+              <stop offset="1" stop-color="#c58b4f"/>
+            </linearGradient>
+            <linearGradient id="dough-fold" x1="0" y1="0" x2="1" y2="1">
+              <stop stop-color="#fff0cc"/>
+              <stop offset="1" stop-color="#d4a165"/>
+            </linearGradient>
+            <linearGradient id="basket" x1="0" y1="0" x2="0" y2="1">
+              <stop stop-color="#c38a4d"/>
+              <stop offset=".42" stop-color="#9a6034"/>
+              <stop offset="1" stop-color="#663b28"/>
+            </linearGradient>
+            <linearGradient id="basket-rim" x1="0" y1="0" x2="0" y2="1">
+              <stop stop-color="#f1ca83"/>
+              <stop offset=".45" stop-color="#bd8247"/>
+              <stop offset="1" stop-color="#75452b"/>
+            </linearGradient>
+            <filter id="soft-shadow" x="-.5" y="-.5" width="2" height="2">
+              <feGaussianBlur stdDeviation="8"/>
+            </filter>
+            <clipPath id="basket-body-clip">
+              <path d="M78 379 Q280 438 482 379 L446 488 Q280 532 114 488Z"/>
+            </clipPath>
+            <g id="crescent-dumpling">
+              <path d="M-51 4 Q-43-18-12-31 Q8-42 31-24 Q48-11 54 7 Q31 3 17 17 Q-3 34-25 26 Q-45 19-51 4Z" fill="url(#dough)" stroke="#f6d9a4" stroke-width="2"/>
+              <path d="M-49 5 Q-35 8-26 21 M-38-11 Q-28 2-24 25 M-23-25 Q-17-9-18 29 M-6-32 Q-5-13-10 29 M12-31 Q10-13 2 26 M29-23 Q24-10 13 19 M43-8 Q34-1 23 11" fill="none" stroke="#b77a45" stroke-opacity=".56" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M-37-9Q-19-31 6-32" fill="none" stroke="#fff4db" stroke-opacity=".82" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g id="pleated-dumpling">
+              <path d="M0-42 C-11-33-33-22-39-5 C-48 19-27 36 0 38 C27 36 48 19 39-5 C33-22 11-33 0-42Z" fill="url(#dough)" stroke="#f6d9a4" stroke-width="2"/>
+              <path d="M0-39 Q-7-14-29 19 M-22-27 Q-12-10-17 29 M-34-13 Q-20-4-8 34 M22-27 Q12-10 17 29 M34-13 Q20-4 8 34 M0-39 Q8-10 29 19" fill="none" stroke="#b77a45" stroke-opacity=".58" stroke-width="2.4" stroke-linecap="round"/>
+              <path d="M-14-26Q0-37 12-27" fill="none" stroke="#fff4db" stroke-opacity=".82" stroke-width="3" stroke-linecap="round"/>
+            </g>
+          </defs>
+
+          <ellipse cx="300" cy="278" rx="230" ry="230" fill="url(#scene-glow)"/>
+          <ellipse cx="286" cy="487" rx="177" ry="24" fill="#26080d" opacity=".38" filter="url(#soft-shadow)"/>
+
+          <g class="steam steam-one" fill="none" stroke="#ffe7c9" stroke-linecap="round">
+            <path d="M190 367 C143 322 222 293 183 247 C158 218 201 196 190 156" stroke-width="3" opacity=".34"/>
+            <path d="M275 365 C231 322 310 288 273 250 C244 221 289 190 276 145" stroke-width="4" opacity=".3"/>
+            <path d="M354 365 C321 324 386 292 355 257 C331 229 374 202 365 170" stroke-width="3" opacity=".27"/>
+          </g>
+          <g class="steam steam-two" fill="none" stroke="#ffd9b1" stroke-linecap="round">
+            <path d="M225 360 C197 327 252 300 229 269 C207 240 246 217 235 184" stroke-width="2" opacity=".28"/>
+            <path d="M321 356 C294 323 347 300 328 268 C309 240 344 220 339 193" stroke-width="2.5" opacity=".24"/>
+          </g>
+
+          <g class="falling-dumpling dumpling-one">
+            <use href="#crescent-dumpling" transform="translate(222 103) rotate(-17) scale(.84)"/>
+          </g>
+          <g class="falling-dumpling dumpling-two">
+            <use href="#crescent-dumpling" transform="translate(373 189) rotate(16) scale(.72)"/>
+          </g>
+          <g class="falling-dumpling dumpling-three">
+            <use href="#pleated-dumpling" transform="translate(296 263) scale(.72)"/>
+          </g>
+          <g class="falling-dumpling dumpling-four">
+            <use href="#crescent-dumpling" transform="translate(407 294) rotate(25) scale(.52)"/>
+          </g>
+
+          <path d="M78 379 Q280 438 482 379 L446 488 Q280 532 114 488Z" fill="url(#basket)" stroke="#e1ae68" stroke-opacity=".7" stroke-width="2"/>
+          <g clip-path="url(#basket-body-clip)" fill="none" stroke="#f0bf75" stroke-opacity=".35">
+            <path d="M105 404 Q280 454 455 404 M111 421 Q280 471 449 421 M116 440 Q280 489 444 440 M123 459 Q280 507 437 459 M132 478 Q280 523 428 478" stroke-width="4"/>
+            <path d="M146 389L162 497 M184 399L196 507 M224 408L230 516 M264 413L265 521 M304 413L300 521 M344 408L334 516 M384 399L368 507 M422 389L401 497" stroke-width="2"/>
+          </g>
+          <ellipse cx="280" cy="379" rx="202" ry="59" fill="url(#basket-rim)" stroke="#f1cb87" stroke-width="3"/>
+          <ellipse cx="280" cy="371" rx="172" ry="37" fill="#4b291f" stroke="#dba967" stroke-width="3"/>
+          <ellipse cx="280" cy="368" rx="152" ry="27" fill="#7a4b2d"/>
+          <g fill="none" stroke="#edc27f" stroke-opacity=".66" stroke-width="3" stroke-linecap="round">
+            <path d="M160 366 Q280 344 400 366"/>
+            <path d="M174 378 Q280 355 386 378"/>
+            <path d="M202 386 Q280 368 358 386"/>
+          </g>
+          <path d="M93 384 Q280 438 467 384" fill="none" stroke="#f5d395" stroke-opacity=".58" stroke-width="4"/>
+        </svg>
+        <span class="hero-art-note">FOLDED FRESH <span aria-hidden="true">✳</span></span>
+      </figure>
       <div class="hero-bottom"><span>HAND-FOLDED IN CAIRO</span><span class="bottom-center">一口幸福 &nbsp; · &nbsp; A BITE OF JOY</span><span>SCROLL TO GET HUNGRY ↓</span></div>
     </section>
 
     <section class="menu-section" id="menu">
-      <div class="section-heading"><div><div class="eyebrow dark-eyebrow"><span class="eyebrow-line"></span> THE GOOD STUFF</div><h2>Meet your new <em>usual.</em></h2></div><p>Folded fresh. Steamed slow.<br>Gone before you know it.</p></div>
-      <div class="menu-toolbar"><div class="category-tabs" id="category-tabs" role="group" aria-label="Filter menu categories"></div><button class="add-category-button" id="add-category" type="button" hidden><span aria-hidden="true">+</span> Add category</button><button class="add-category-button" id="add-item" type="button" hidden><span aria-hidden="true">+</span> Add dish</button><span class="menu-count" id="menu-count"></span></div>
+      <div class="section-heading"><div><div class="eyebrow dark-eyebrow"><span class="eyebrow-line"></span> THE GOOD STUFF</div><h2>Meet your new <em>usual.</em></h2></div><p>Folded fresh. Made your way.<br>Gone before you know it.</p></div>
+      <div class="menu-toolbar"><div class="category-tabs" id="category-tabs" role="group" aria-label="Filter menu categories"></div><button class="add-category-button" id="add-item" type="button" hidden><span aria-hidden="true">+</span> Add dish</button><span class="menu-count" id="menu-count"></span></div>
       <div class="product-grid" id="product-grid" aria-live="polite"></div>
-      <div class="menu-empty" id="menu-empty" hidden><span>✳</span><h3>Nothing on the steamer just yet.</h3><p>Try another category, or add a dish in Manage mode.</p></div>
+      <div class="menu-empty" id="menu-empty" hidden><span>✳</span><h3>Nothing on the menu just yet.</h3><p>Try another category, or add a dish in Manage mode.</p></div>
     </section>
+
+    <section class="menu-section offers-section" id="offers-section" hidden><div class="section-heading"><div><div class="eyebrow dark-eyebrow"><span class="eyebrow-line"></span> A LITTLE EXTRA</div><h2>Good things are <em>on offer.</em></h2></div><button class="add-category-button" id="offer-add" type="button" hidden><span aria-hidden="true">+</span> Add offer</button></div><div class="offers-grid" id="offers-grid"></div></section>
 
     <section class="story-strip" id="story"><div class="story-mark">慢<br><span>MADE</span></div><div class="story-copy"><div class="eyebrow"><span class="eyebrow-line"></span> A NOTE FROM OUR KITCHEN</div><h2>Some things are worth<br>taking <em>your time over.</em></h2></div><p>Every pleat, every little parcel, folded by hand in our Cairo kitchen. No shortcuts, no sad dumplings. Just the good stuff, made fresh when you order.</p><a href="#menu" aria-label="Back to the menu">↗</a></section>
   </main>
@@ -59,7 +153,11 @@
 
   <dialog class="app-dialog checkout-dialog" id="checkout-dialog"><form id="checkout-form"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">ONE LAST LITTLE THING</span><h2>Where to, friend?</h2></div><button class="icon-button dialog-close" type="button" aria-label="Close dialog">×</button></div><label>Your name<input name="customer" required maxlength="70" autocomplete="name" placeholder="The name on the doorbell"></label><label>Phone number<input name="phone" required type="tel" autocomplete="tel" placeholder="01X XXXX XXXX"></label><label>Delivery address<textarea name="address" required maxlength="240" rows="2" autocomplete="street-address" placeholder="Building, street, area, Cairo"></textarea></label><fieldset class="payment-options"><legend>How would you like to pay?</legend><label class="payment-option"><input name="payment" type="radio" value="Cash on delivery" checked><span class="payment-icon">١</span><span><strong>Cash on delivery</strong><small>Pay when your dumplings arrive</small></span><span class="radio-mark"></span></label><label class="payment-option"><input name="payment" type="radio" value="InstaPay"><span class="payment-icon">↗</span><span><strong>InstaPay</strong><small>We’ll share transfer details after you order</small></span><span class="radio-mark"></span></label></fieldset><div class="checkout-total"><span>Order subtotal</span><strong id="checkout-total">EGP 0</strong></div><button class="primary-button submit-order" type="submit">Place my order <span>↗</span></button><p class="checkout-note">We’ll call to confirm your order and delivery fee.</p></form></dialog>
 
-  <dialog class="app-dialog orders-dialog" id="orders-dialog"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">THE KITCHEN LEDGER</span><h2>Restaurant orders</h2></div><button class="icon-button" id="orders-close" type="button" aria-label="Close orders">×</button></div><form class="staff-auth" id="staff-auth-form"><label>Staff access token<input name="token" type="password" autocomplete="current-password" required placeholder="Enter the token from the server console"></label><button class="primary-button" type="submit">Open order book <span>↗</span></button><p class="checkout-note" id="staff-auth-message">Orders and customer details are private to staff.</p></form><div class="orders-content" id="orders-content" hidden><div class="order-stats"><div><span>Orders</span><strong id="order-stat-count">0</strong></div><div><span>Active earnings</span><strong id="order-stat-earnings">EGP 0</strong></div><div><span>Awaiting action</span><strong id="order-stat-new">0</strong></div></div><div class="orders-toolbar"><span id="orders-last-updated">Live order inbox</span><button class="add-category-button" id="orders-refresh" type="button">Refresh</button><button class="primary-button export-orders" id="orders-export" type="button">Export CSV <span>↓</span></button></div><div class="orders-list" id="orders-list"></div></div></dialog>
+  <dialog class="app-dialog" id="account-dialog"><form id="account-form"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">YOUR DUMPLING LAB ACCOUNT</span><h2>Welcome in.</h2></div><button class="icon-button dialog-close" type="button" aria-label="Close account">×</button></div><label>Email<input name="email" type="email" required maxlength="254" autocomplete="email" placeholder="you@example.com"></label><label>Password<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="current-password" placeholder="At least 12 characters"></label><div class="dialog-actions"><button class="secondary-button" id="account-signup" type="button">Create customer account</button><button class="primary-button" type="submit">Sign in <span>↗</span></button></div><p class="checkout-note" id="account-message">Customer accounts are read-only. Admin accounts are provisioned by the restaurant.</p></form></dialog>
+
+  <dialog class="app-dialog" id="offer-dialog"><form id="offer-form"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">A LITTLE SOMETHING SPECIAL</span><h2 id="offer-dialog-title">Add an offer</h2></div><button class="icon-button dialog-close" type="button" aria-label="Close offer form">×</button></div><input type="hidden" name="id"><label>Offer title<input name="title" required maxlength="70" placeholder="e.g. A little midweek treat"></label><label>Description<textarea name="description" maxlength="240" rows="3" placeholder="Tell customers about this offer"></textarea></label><label>Discount <span class="field-unit">%</span><input name="discountPercent" type="number" min="0" max="100" step="1" required></label><label class="payment-option"><input name="active" type="checkbox" checked><span>Show this offer to customers</span></label><div class="dialog-actions"><button class="secondary-button dialog-close" type="button">Cancel</button><button class="primary-button" type="submit">Save offer <span>↗</span></button></div></form></dialog>
+
+  <dialog class="app-dialog orders-dialog" id="orders-dialog"><div class="dialog-head"><div><span class="eyebrow dark-eyebrow">THE KITCHEN LEDGER</span><h2>Restaurant orders</h2></div><button class="icon-button" id="orders-close" type="button" aria-label="Close orders">×</button></div><p class="checkout-note" id="orders-auth-message" hidden></p><button class="primary-button" id="orders-signin" type="button" hidden>Sign in as admin <span>↗</span></button><div class="orders-content" id="orders-content" hidden><div class="order-stats"><div><span>Orders</span><strong id="order-stat-count">0</strong></div><div><span>Active earnings</span><strong id="order-stat-earnings">EGP 0</strong></div><div><span>Awaiting action</span><strong id="order-stat-new">0</strong></div></div><div class="orders-toolbar"><span id="orders-last-updated">Live order inbox</span><button class="add-category-button" id="orders-refresh" type="button">Refresh</button><button class="primary-button export-orders" id="orders-export" type="button">Export CSV <span>↓</span></button></div><div class="orders-list" id="orders-list"></div></div></dialog>
 
   <dialog class="app-dialog success-dialog" id="success-dialog"><div class="success-content"><span class="success-stamp">✳</span><div class="eyebrow dark-eyebrow">IT'S OFFICIALLY HAPPENING</div><h2>Your dumplings<br>are <em>on their way.</em></h2><p id="order-confirmation"></p><div class="instapay-details" id="instapay-details" hidden><strong>Pay with InstaPay</strong><p>Transfer to <b>@dumplinglab</b> and keep the transaction reference. We'll confirm your order by phone.</p></div><button class="primary-button" id="success-close" type="button">Lovely, thank you <span>↗</span></button></div></dialog>
 

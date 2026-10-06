@@ -1,0 +1,49 @@
+.offers-section {
+  padding-top: 2rem;
+}
+
+.offers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 1rem;
+}
+
+.offer-card {
+  position: relative;
+  padding: 1.5rem;
+  border: 1px solid rgba(33, 29, 25, .14);
+  border-radius: 1rem;
+  background: var(--rice-light, #fbf7ef);
+}
+
+.offer-card h3 {
+  margin: 0 0 .5rem;
+  font-family: "Playfair Display", Georgia, serif;
+}
+
+.offer-card p {
+  margin: 0;
+  color: var(--muted, #756e63);
+}
+
+.offer-discount {
+  display: inline-block;
+  margin-bottom: .75rem;
+  color: #9b321f;
+  font-weight: 700;
+}
+
+.offer-manage {
+  display: flex;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+
+.offer-manage button {
+  padding: .45rem .75rem;
+  border: 1px solid rgba(33, 29, 25, .2);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
