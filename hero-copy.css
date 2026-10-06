@@ -5,9 +5,27 @@
 .header-actions{gap:16px}
 .hero-order-button{min-height:42px;padding:0 17px;display:inline-flex;align-items:center;gap:18px;background:#f2c744;color:#351019;font-size:10px;font-weight:700;letter-spacing:.1em;white-space:nowrap;transition:background .2s,transform .2s}
 .hero-order-button:hover{background:#ffdc63;transform:translateY(-1px)}
-.hero{background:#5b101c;color:#fff8ef}
+.hero{
+  min-height:650px;
+  height:min(760px,calc(100svh - 113px));
+  max-height:820px;
+  grid-template-columns:minmax(0,1fr);
+  align-items:start;
+  padding:58px 8% 55px;
+  background-color:#5b101c;
+  background-image:
+    linear-gradient(90deg,rgba(67,9,20,.2),rgba(67,9,20,0) 76%),
+    linear-gradient(0deg,rgba(58,13,14,.18),transparent 38%),
+    url("assets/hero-background.jpeg");
+  background-repeat:no-repeat;
+  background-size:cover;
+  background-position:center;
+  color:#fff8ef
+}
+.hero-copy{max-width:590px}
 .hero-copy .eyebrow,.hero-copy h1,.hero-copy p,.hero-copy .hero-note,.hero-footnote{color:#fff8ef}
 .hero-copy h1{font-family:'Playfair Display',Georgia,serif}
+.hero-copy h1 em{color:#f2c744}
 .hero-copy p{color:rgba(255,248,239,.78)}
 .hero-copy .eyebrow-line{background:#e9be58}
 .hero-copy .primary-link{background:#f2c744;color:#351019}
@@ -23,6 +41,21 @@
   .manage-button>span:first-child{font-size:12px}
   #manage-label{display:none}
   .hero-order-button{min-height:36px;padding:0 10px;gap:7px;font-size:9px}
+  .hero{
+    min-height:760px;
+    height:calc(100svh - 93px);
+    max-height:900px;
+    padding:38px 7% 54px;
+    background-image:
+      linear-gradient(180deg,#5b101c 0%,rgba(91,16,28,.96) 34%,rgba(91,16,28,.76) 51%,rgba(91,16,28,.04) 78%,rgba(40,12,10,.18) 100%),
+      url("assets/hero-background.jpeg");
+    background-size:100% 100%,auto 72%;
+    background-position:center,right bottom;
+  }
+  .hero-copy{max-width:440px}
+  .hero .hero-copy h1{font-size:clamp(40px,11.5vw,54px)}
+  .hero-footnote{margin-top:32px}
+  .hero-bottom{padding:0 5%;font-size:7px;letter-spacing:.08em}
 }
 @media(prefers-reduced-motion:reduce){
   .hero-order-button{transition:none}

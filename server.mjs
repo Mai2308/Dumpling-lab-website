@@ -648,7 +648,16 @@ function serveStatic(pathname, response) {
   let contents;
   try { contents = readFileSync(filePath); }
   catch { response.writeHead(404).end('Not found'); return; }
-  const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
+  const types = {
+    '.html': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp'
+  };
   response.writeHead(200, { 'Content-Type': types[extname(filePath)] || 'application/octet-stream' });
   response.end(contents);
 }
