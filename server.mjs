@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createTransport } from 'nodemailer';
 
 const scrypt = promisify(scryptCallback);
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -56,6 +57,7 @@ database.exec(`
     id TEXT PRIMARY KEY,
     customer TEXT NOT NULL,
     phone TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL,
     payment TEXT NOT NULL CHECK (payment IN ('Cash on delivery', 'InstaPay')),
     subtotal INTEGER NOT NULL CHECK (subtotal >= 0),
@@ -77,6 +79,7 @@ database.exec(`
 `);
 
 ensureOrderItemStyleColumn();
+ensureOrderEmailColumn();
 migrateMenuCategories();
 seedMenu();
 await bootstrapAdmin();
@@ -154,11 +157,11 @@ async function handleApi(request, response, url) {
     const order = validateOrder(await readBody(request));
     const id = `DL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
     const createdAt = new Date().toISOString();
-    const insertOrder = database.prepare('INSERT INTO orders (id, customer, phone, address, payment, subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const insertOrder = database.prepare('INSERT INTO orders (id, customer, phone, email, address, payment, subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertItem = database.prepare('INSERT INTO order_items (order_id, name, category, quantity, unit_price, line_total, style) VALUES (?, ?, ?, ?, ?, ?, ?)');
     database.exec('BEGIN IMMEDIATE');
     try {
-      insertOrder.run(id, order.customer, order.phone, order.address, order.payment, order.subtotal, createdAt);
+      insertOrder.run(id, order.customer, order.phone, order.email, order.address, order.payment, order.subtotal, createdAt);
       for (const item of order.items) insertItem.run(id, item.name, item.category, item.quantity, item.unitPrice, item.lineTotal, item.style);
       database.exec('COMMIT');
     } catch (error) {
@@ -396,6 +399,13 @@ function ensureOrderItemStyleColumn() {
   }
 }
 
+function ensureOrderEmailColumn() {
+  const columns = database.prepare('PRAGMA table_info(orders)').all();
+  if (!columns.some(column => column.name === 'email')) {
+    database.exec("ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+  }
+}
+
 function migrateMenuCategories() {
   database.exec('BEGIN IMMEDIATE');
   try {
@@ -546,10 +556,12 @@ function validateOrder(body) {
   const cleanText = (value, limit) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
   const customer = cleanText(body.customer, 70);
   const phone = cleanText(body.phone, 40);
+  const email = cleanText(body.email, 254).toLowerCase();
   const address = cleanText(body.address, 240);
-  if (!customer || !phone || !address || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 40) {
-    throw httpError(400, 'Add your name, phone, address, and at least one item.');
+  if (!customer || !phone || !email || !address || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 40) {
+    throw httpError(400, 'Add your name, phone, email, address, and at least one item.');
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw httpError(400, 'Enter a valid email address for order confirmation.');
   if (!['Cash on delivery', 'InstaPay'].includes(body.payment)) throw httpError(400, 'Choose cash on delivery or InstaPay.');
   const items = body.items.map(entry => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
@@ -564,14 +576,14 @@ function validateOrder(body) {
   });
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
   if (!Number.isSafeInteger(subtotal)) throw httpError(400, 'Order total is too large.');
-  return { customer, phone, address, payment: body.payment, items, subtotal };
+  return { customer, phone, email, address, payment: body.payment, items, subtotal };
 }
 
 function getOrder(id) {
   const order = database.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return null;
   const items = database.prepare('SELECT name, category, quantity, unit_price AS unitPrice, line_total AS lineTotal, style FROM order_items WHERE order_id = ? ORDER BY id').all(id);
-  return { ...order, createdAt: order.created_at, notificationStatus: order.notification_status, items };
+  return { ...order, createdAt: order.created_at, customerEmail: order.email || '', notificationStatus: order.notification_status, items };
 }
 
 function listOrders() {
@@ -579,21 +591,104 @@ function listOrders() {
   return orders.map(({ id }) => getOrder(id));
 }
 
+function getEmailTransporter() {
+  const host = process.env.SMTP_HOST?.trim();
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const from = process.env.SMTP_FROM?.trim() || process.env.STORE_EMAIL?.trim() || user;
+  const storeEmail = process.env.STORE_EMAIL?.trim();
+  if (!host || !storeEmail || !user || !pass || !from) return null;
+  return createTransport({
+    host,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
+    auth: { user, pass }
+  });
+}
+
+function formatOrderSummary(order, mode) {
+  const items = order.items.map(item => `${item.quantity} × ${item.name}${item.style ? ` (${item.style})` : ''}`).join('\n');
+  const total = `EGP ${Number(order.subtotal).toLocaleString('en-EG')}`;
+  const subject = mode === 'customer' ? `Your Dumpling Lab order ${order.id} is confirmed` : `New Dumpling Lab order ${order.id}`;
+  const text = mode === 'customer'
+    ? `Thanks for ordering from Dumpling Lab. Your order ${order.id} has been received and is being prepared.\n\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`
+    : `New order received for Dumpling Lab.\n\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`;
+  return { subject, text };
+}
+
+async function sendEmailNotification(order, mode) {
+  const transporter = getEmailTransporter();
+  if (!transporter) return false;
+  const storeEmail = process.env.STORE_EMAIL?.trim();
+  const recipient = mode === 'customer' ? order.email : storeEmail;
+  if (!recipient) return false;
+  const { subject, text } = formatOrderSummary(order, mode);
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM?.trim() || process.env.STORE_EMAIL?.trim() || process.env.SMTP_USER,
+    to: recipient,
+    replyTo: mode === 'customer' ? storeEmail : order.email,
+    subject,
+    text
+  });
+  return true;
+}
+
+async function sendTelegramNotification(order) {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  if (!token || !chatId) return false;
+  const items = order.items.map(item => `${item.quantity} × ${item.name}${item.style ? ` (${item.style})` : ''}`).join('\n');
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: `📦 New Dumpling Lab order\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: EGP ${Number(order.subtotal).toLocaleString('en-EG')}`,
+      disable_web_page_preview: true
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.description || `Telegram responded ${response.status}`);
+  return true;
+}
+
 async function notifyRestaurant(order) {
+  const sent = [];
   const webhookURL = process.env.RESTAURANT_WEBHOOK_URL;
-  if (!webhookURL) return;
-  try {
-    const result = await fetch(webhookURL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'new_order', order })
-    });
-    if (!result.ok) throw new Error(`Webhook responded ${result.status}`);
-    database.prepare("UPDATE orders SET notification_status = 'Webhook sent' WHERE id = ?").run(order.id);
-  } catch (error) {
-    database.prepare("UPDATE orders SET notification_status = 'Inbox only' WHERE id = ?").run(order.id);
-    throw error;
+  if (webhookURL) {
+    try {
+      const result = await fetch(webhookURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'new_order', order })
+      });
+      if (!result.ok) throw new Error(`Webhook responded ${result.status}`);
+      sent.push('Webhook');
+    } catch (error) {
+      console.error('Restaurant webhook failed:', error.message);
+    }
   }
+
+  try {
+    if (await sendTelegramNotification(order)) sent.push('Telegram');
+  } catch (error) {
+    console.error('Telegram notification failed:', error.message);
+  }
+
+  try {
+    if (await sendEmailNotification(order, 'store')) sent.push('Store email');
+  } catch (error) {
+    console.error('Store email notification failed:', error.message);
+  }
+
+  try {
+    if (order.email && await sendEmailNotification(order, 'customer')) sent.push('Customer email');
+  } catch (error) {
+    console.error('Customer email notification failed:', error.message);
+  }
+
+  const status = sent.length ? sent.join(', ') : 'Inbox only';
+  database.prepare('UPDATE orders SET notification_status = ? WHERE id = ?').run(status, order.id);
 }
 
 function csvCell(value) {
@@ -603,11 +698,12 @@ function csvCell(value) {
 }
 
 function ordersCSV(orders) {
-  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Phone', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Status', 'Restaurant notification']];
+  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Email', 'Phone', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Status', 'Restaurant notification']];
   for (const order of orders) rows.push([
     order.id,
     order.createdAt,
     order.customer,
+    order.customerEmail || order.email || '',
     order.phone,
     order.address,
     order.items.map(item => `${item.quantity} x ${item.name} (${item.category}${item.style ? `, ${item.style}` : ''})`).join('; '),

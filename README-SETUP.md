@@ -37,16 +37,32 @@ For local SQLite development, open the site through this server. For Vercel, the
 
 In **Orders**, choose **Export CSV**. Excel opens the downloaded CSV, including order number, time, customer/contact details, item and quantity, payment method, subtotal, status, and notification delivery. The export uses a UTF-8 BOM and protects spreadsheet cells from formula injection.
 
-## Restaurant notifications
+## Restaurant notifications and confirmations
 
-Orders immediately appear in the database-backed staff inbox. To also push each new order to a restaurant system that accepts a JSON webhook, set `RESTAURANT_WEBHOOK_URL` before starting the server. It receives a `POST` with `{ "event": "new_order", "order": { ... } }`. A successful webhook is shown on the order; failed webhook delivery leaves the order safely saved in the inbox.
+Orders immediately appear in the database-backed staff inbox. You can also enable instant Telegram alerts and email confirmation delivery for the store and the customer.
 
-PowerShell example:
+Set the environment variables before starting the server:
 
 ```powershell
+$env:STORE_EMAIL = 'orders@dumplinglab.example'
+$env:SMTP_HOST = 'smtp.gmail.com'
+$env:SMTP_PORT = '587'
+$env:SMTP_USER = 'your-smtp-user@gmail.com'
+$env:SMTP_PASS = 'your-smtp-app-password'
+$env:SMTP_FROM = 'Dumpling Lab <orders@dumplinglab.example>'
+$env:TELEGRAM_BOT_TOKEN = '123456:ABCDEF'
+$env:TELEGRAM_CHAT_ID = '987654321'
 $env:RESTAURANT_WEBHOOK_URL = 'https://your-order-system.example/webhook'
 npm start
 ```
+
+The order form now asks for a customer email and sends:
+- a Telegram message to your phone for a high-priority alert,
+- an email to the store inbox for record-keeping,
+- an email confirmation to the customer,
+- and a JSON webhook to any external restaurant system if `RESTAURANT_WEBHOOK_URL` is configured.
+
+If email or Telegram delivery fails, the order stays saved in the inbox and the notification state is updated on the order card.
 
 For a Vercel + MongoDB Atlas + Cloudinary **demo deployment**, follow [DEPLOY-VERCEL.md](./DEPLOY-VERCEL.md). The Vercel Hobby plan is restricted to non-commercial personal use; do not use it for live restaurant orders or real customer data. For commercial use, select a plan that allows it and confirm all providers' current terms and limits.
 

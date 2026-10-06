@@ -11,6 +11,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
-    "mongodb": "^6.17.0"
+    "mongodb": "^6.17.0",
+    "nodemailer": "^10.0.15"
   }
 }

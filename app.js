@@ -308,6 +308,7 @@ byId('checkout-form').addEventListener('submit', async event => {
     const orderPayload = {
       customer: form.elements.customer.value.trim(),
       phone: form.elements.phone.value.trim(),
+      email: form.elements.email.value.trim(),
       address: form.elements.address.value.trim(),
       payment: form.elements.payment.value,
       items: entries.map(([key, quantity]) => {
@@ -319,7 +320,7 @@ byId('checkout-form').addEventListener('submit', async event => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Your order could not be sent. Please try again.');
     const order = result.order;
-    byId('order-confirmation').textContent = `Order ${order.id} is in the kitchen for ${order.customer}. We’ll call ${order.phone} to confirm the details and delivery fee.`;
+    byId('order-confirmation').textContent = `Order ${order.id} is in the kitchen for ${order.customer}. We’ll call ${order.phone} and email a confirmation to ${order.customerEmail || order.email || 'your inbox'} about the delivery details.`;
     byId('instapay-details').hidden = order.payment !== 'InstaPay';
     state.cart = {};
     form.reset(); renderCart();
@@ -349,7 +350,7 @@ function renderOrders() {
   byId('order-stat-earnings').textContent = money(earnings);
   byId('order-stat-new').textContent = awaiting;
   byId('orders-last-updated').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · refreshes every 20 seconds`;
-  byId('orders-list').innerHTML = count ? state.orders.map(order => `<article class="order-card"><div class="order-card-head"><div><span class="order-id">${escapeHTML(order.id)}</span><time>${new Date(order.createdAt).toLocaleString()}</time></div><strong>${money(order.subtotal)}</strong></div><div class="order-customer"><strong>${escapeHTML(order.customer)}</strong><a href="tel:${escapeHTML(order.phone)}">${escapeHTML(order.phone)}</a><span>${escapeHTML(order.address)}</span></div><div class="order-items">${order.items.map(item => `<span>${item.quantity} × ${escapeHTML(item.name)}${item.style ? ` · ${escapeHTML(item.style)}` : ''}</span>`).join('')}<span class="order-payment">${escapeHTML(order.payment)}</span></div><div class="order-card-foot"><span class="notification-state">${escapeHTML(order.notification_status)}</span><label>Status<select data-order-status="${escapeHTML(order.id)}">${['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'].map(status => `<option${status === order.status ? ' selected' : ''}>${status}</option>`).join('')}</select></label></div></article>`).join('') : '<div class="orders-empty">No orders yet. New customer orders will appear here.</div>';
+  byId('orders-list').innerHTML = count ? state.orders.map(order => `<article class="order-card"><div class="order-card-head"><div><span class="order-id">${escapeHTML(order.id)}</span><time>${new Date(order.createdAt).toLocaleString()}</time></div><strong>${money(order.subtotal)}</strong></div><div class="order-customer"><strong>${escapeHTML(order.customer)}</strong><a href="tel:${escapeHTML(order.phone)}">${escapeHTML(order.phone)}</a>${order.customerEmail ? `<a href="mailto:${escapeHTML(order.customerEmail)}">${escapeHTML(order.customerEmail)}</a>` : ''}<span>${escapeHTML(order.address)}</span></div><div class="order-items">${order.items.map(item => `<span>${item.quantity} × ${escapeHTML(item.name)}${item.style ? ` · ${escapeHTML(item.style)}` : ''}</span>`).join('')}<span class="order-payment">${escapeHTML(order.payment)}</span></div><div class="order-card-foot"><span class="notification-state">${escapeHTML(order.notification_status)}</span><label>Status<select data-order-status="${escapeHTML(order.id)}">${['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'].map(status => `<option${status === order.status ? ' selected' : ''}>${status}</option>`).join('')}</select></label></div></article>`).join('') : '<div class="orders-empty">No orders yet. New customer orders will appear here.</div>';
   byId('orders-list').querySelectorAll('[data-order-status]').forEach(select => select.addEventListener('change', async () => {
     select.disabled = true;
     try {
