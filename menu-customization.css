@@ -20,3 +20,17 @@
   color: var(--ink, #211d19);
   font: inherit;
 }
+.stock-fields{display:grid;grid-template-columns:1fr;gap:0;margin:0 0 15px}
+.stock-fields>label{display:block;margin:0 0 15px;color:#665e53;font-size:10px;font-weight:600}
+.sold-out-option{margin-bottom:0}
+.is-sold-out{opacity:.62}
+.is-sold-out .product-image{filter:grayscale(.65)}
+.sold-out-badge{padding:7px 12px;border:1px solid #d5c7b2;color:#8a8175;font-size:9px;letter-spacing:.12em;text-transform:uppercase}
+.stock-note{color:#877d70;font-size:8px;letter-spacing:.08em;text-transform:uppercase}
+.hours-notice{margin:18px 2px 0;color:#766e63;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.hours-notice.hours-closed{color:var(--red)}
+.hours-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:center;margin-bottom:11px}
+.hours-day{color:#665e53;font-size:11px;font-weight:600}
+.hours-field{display:flex;flex-direction:column;color:#665e53;font-size:9px}
+.hours-field input{margin-top:4px}
+.hours-closed-check{display:flex;align-items:center;gap:6px;color:#877d70;font-size:10px;white-space:nowrap}

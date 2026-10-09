@@ -197,6 +197,47 @@ function cleanText(value, limit) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
 }
 
+const WORKING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const defaultWorkingHours = WORKING_DAYS.map(day => ({ day, open: '11:00', close: '23:00', closed: false }));
+
+function validateWorkingHours(body) {
+  const source = Array.isArray(body?.hours) ? body.hours : Array.isArray(body) ? body : [];
+  const time = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim()) ? value.trim() : '';
+  const byDay = new Map(source.map(entry => [String(entry?.day || '').toLowerCase(), entry]));
+  return WORKING_DAYS.map(day => {
+    const entry = byDay.get(day) || {};
+    const open = time(entry.open) || '11:00';
+    const close = time(entry.close) || '23:00';
+    const closed = Boolean(entry.closed) || !time(entry.open) || !time(entry.close);
+    return { day, open, close, closed };
+  });
+}
+
+async function getWorkingHours(db) {
+  const row = await db.collection('app_metadata').findOne({ _id: 'working-hours' });
+  if (!row) return defaultWorkingHours;
+  return validateWorkingHours(row.hours);
+}
+
+function cairoNow() {
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
+  const parts = Object.fromEntries(formatter.formatToParts(new Date()).map(part => [part.type, part.value]));
+  const hour = parts.hour === '24' ? 0 : Number(parts.hour);
+  return { day: parts.weekday.toLowerCase(), minutes: hour * 60 + Number(parts.minute) };
+}
+
+const toMinutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
+
+function assertWithinWorkingHours(hours) {
+  const { day, minutes } = cairoNow();
+  const today = (Array.isArray(hours) ? hours : defaultWorkingHours).find(entry => entry.day === day);
+  if (!today || today.closed) throw httpError(423, 'The kitchen is closed right now. Check our working hours and try again later.');
+  const open = toMinutes(today.open);
+  const close = toMinutes(today.close);
+  const within = open <= close ? minutes >= open && minutes < close : minutes >= open || minutes < close;
+  if (!within) throw httpError(423, 'The kitchen is closed right now. Check our working hours and try again later.');
+}
+
 function validateMenuItem(body, existingId = null) {
   const suppliedCategory = cleanText(body.category, 35);
   const category = menuCategories.find(entry => entry.toLowerCase() === suppliedCategory.toLowerCase());
@@ -207,11 +248,16 @@ function validateMenuItem(body, existingId = null) {
     price: Number(body.price),
     description: cleanText(body.description, 180),
     image: cleanText(body.image, 2_000),
-    tag: cleanText(body.tag, 50)
+    tag: cleanText(body.tag, 50),
+    stock: body.stock === null || body.stock === undefined || body.stock === '' ? -1 : Number(body.stock),
+    soldOut: Boolean(body.soldOut)
   };
   if (!item.id || !item.name || !item.category || !Number.isSafeInteger(item.price) || item.price < 0 || item.price > 1_000_000) {
     throw httpError(400, 'Provide a valid dish ID, name, category, and whole-number price.');
   }
+  if (!Number.isSafeInteger(item.stock) || item.stock < -1 || item.stock > 100_000) throw httpError(400, 'Stock must be a whole number from 0 to 100000, or empty for unlimited.');
+  item.soldOut = item.soldOut || (item.stock === 0);
+  item.stock = item.soldOut && item.stock === -1 ? 0 : item.stock;
   if (item.image && !/^https:\/\/[^\s]+$/i.test(item.image)) throw httpError(400, 'Dish photos must use HTTPS.');
   return item;
 }
@@ -241,14 +287,17 @@ async function validateOrder(body, menu) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     return { id: typeof entry.id === 'string' ? entry.id : '', quantity: Number(entry.quantity), style: typeof entry.style === 'string' ? entry.style : '' };
   });
-  const menuItems = await menu.find({ id: { $in: submittedItems.map(item => item.id) } }, { projection: { _id: 0, id: 1, name: 1, category: 1, price: 1 } }).toArray();
+  const menuItems = await menu.find({ id: { $in: submittedItems.map(item => item.id) } }, { projection: { _id: 0, id: 1, name: 1, category: 1, price: 1, stock: 1, soldOut: 1 } }).toArray();
   const menuById = new Map(menuItems.map(item => [item.id, item]));
   const items = submittedItems.map(entry => {
     const menuItem = menuById.get(entry.id);
     if (!menuItem || !Number.isInteger(entry.quantity) || entry.quantity < 1 || entry.quantity > 99) throw httpError(400, 'One or more order items are invalid.');
+    if (menuItem.soldOut) throw httpError(409, `“${menuItem.name}” is sold out today.`);
+    if (Number.isInteger(menuItem.stock) && menuItem.stock >= 0 && entry.quantity > menuItem.stock) throw httpError(409, `Only ${menuItem.stock} left of “${menuItem.name}”.`);
     if (menuItem.category === 'Dumplings' && !dumplingStyles.includes(entry.style)) throw httpError(400, `Choose a dumpling style: ${dumplingStyles.join(', ')}.`);
     if (menuItem.category !== 'Dumplings' && entry.style) throw httpError(400, 'Only dumplings can have a preparation style.');
     return {
+      id: entry.id,
       name: menuItem.name,
       category: menuItem.category,
       quantity: entry.quantity,
@@ -516,6 +565,8 @@ async function handleApi(request, response, db, url) {
   }
 
   if (pathname === '/api/orders' && method === 'POST') {
+    const hours = await getWorkingHours(db);
+    assertWithinWorkingHours(hours);
     const orderData = await validateOrder(body, menu);
     const id = `DL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
     const notificationStatus = 'Inbox';
@@ -529,8 +580,33 @@ async function handleApi(request, response, db, url) {
       createdAt: new Date().toISOString()
     };
     await orders.insertOne({ ...order });
+    const stockRows = await menu.find({ id: { $in: orderData.items.map(item => item.id) } }, { projection: { _id: 0, id: 1, stock: 1, soldOut: 1 } }).toArray();
+    for (const row of stockRows) {
+      if (row.soldOut) continue;
+      const ordered = orderData.items.filter(item => item.id === row.id).reduce((total, item) => total + item.quantity, 0);
+      if (!Number.isInteger(row.stock) || row.stock < 0) continue;
+      const remaining = Math.max(row.stock - ordered, 0);
+      const update = { stock: remaining };
+      if (remaining === 0) update.soldOut = true;
+      await menu.updateOne({ id: row.id }, { $set: update });
+    }
     await sendRestaurantNotification(order, orders);
     sendJson(response, 201, { order });
+    return;
+  }
+
+  if (pathname === '/api/hours' && method === 'GET') {
+    const db = await getDatabase();
+    sendJson(response, 200, { hours: await getWorkingHours(db) });
+    return;
+  }
+
+  if (pathname === '/api/hours' && method === 'PUT') {
+    await verifyAdmin(request, users);
+    const db = await getDatabase();
+    const hours = validateWorkingHours(body);
+    await db.collection('app_metadata').updateOne({ _id: 'working-hours' }, { $set: { hours, updatedAt: new Date() } }, { upsert: true });
+    sendJson(response, 200, { hours });
     return;
   }
 

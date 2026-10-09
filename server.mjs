@@ -44,7 +44,9 @@ database.exec(`
     price INTEGER NOT NULL CHECK (price >= 0),
     description TEXT NOT NULL DEFAULT '',
     image TEXT NOT NULL DEFAULT '',
-    tag TEXT NOT NULL DEFAULT ''
+    tag TEXT NOT NULL DEFAULT '',
+    stock INTEGER NOT NULL DEFAULT -1,
+    sold_out INTEGER NOT NULL DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS offers (
     id TEXT PRIMARY KEY,
@@ -65,6 +67,10 @@ database.exec(`
     notification_status TEXT NOT NULL DEFAULT 'Inbox',
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS order_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -80,6 +86,7 @@ database.exec(`
 
 ensureOrderItemStyleColumn();
 ensureOrderEmailColumn();
+ensureMenuItemStockColumns();
 migrateMenuCategories();
 seedMenu();
 await bootstrapAdmin();
@@ -145,6 +152,17 @@ async function handleApi(request, response, url) {
     json(response, 200, { offers });
     return true;
   }
+  if (pathname === '/api/hours' && method === 'GET') {
+    json(response, 200, { hours: getWorkingHours() });
+    return true;
+  }
+  if (pathname === '/api/hours' && method === 'PUT') {
+    verifyAdmin(request);
+    const hours = validateWorkingHours(await readBody(request));
+    database.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('workingHours', JSON.stringify(hours));
+    json(response, 200, { hours });
+    return true;
+  }
   if (pathname === '/api/uploads' && method === 'POST') {
     verifyAdmin(request);
     const body = await readBody(request, 3_600_000);
@@ -154,6 +172,7 @@ async function handleApi(request, response, url) {
   }
 
   if (pathname === '/api/orders' && method === 'POST') {
+    assertWithinWorkingHours();
     const order = validateOrder(await readBody(request));
     const id = `DL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
     const createdAt = new Date().toISOString();
@@ -162,7 +181,10 @@ async function handleApi(request, response, url) {
     database.exec('BEGIN IMMEDIATE');
     try {
       insertOrder.run(id, order.customer, order.phone, order.email, order.address, order.payment, order.subtotal, createdAt);
-      for (const item of order.items) insertItem.run(id, item.name, item.category, item.quantity, item.unitPrice, item.lineTotal, item.style);
+      for (const item of order.items) {
+        insertItem.run(id, item.name, item.category, item.quantity, item.unitPrice, item.lineTotal, item.style);
+        database.prepare('UPDATE menu_items SET stock = MAX(stock - ?, 0), sold_out = CASE WHEN stock - ? <= 0 THEN 1 ELSE sold_out END WHERE id = ? AND stock >= 0').run(item.quantity, item.quantity, item.id);
+      }
       database.exec('COMMIT');
     } catch (error) {
       database.exec('ROLLBACK');
@@ -237,7 +259,7 @@ async function handleApi(request, response, url) {
     verifyAdmin(request);
     const item = validateMenuItem(await readBody(request));
     try {
-      database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag) VALUES (?, ?, ?, ?, ?, ?, ?)').run(item.id, item.name, item.category, item.price, item.description, item.image, item.tag);
+      database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag, stock, sold_out) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(item.id, item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0);
     } catch (error) {
       if (String(error.message).includes('UNIQUE')) throw httpError(409, 'That menu item ID already exists.');
       throw error;
@@ -256,7 +278,7 @@ async function handleApi(request, response, url) {
       return true;
     }
     const item = validateMenuItem(await readBody(request), id);
-    const result = database.prepare('UPDATE menu_items SET name = ?, category = ?, price = ?, description = ?, image = ?, tag = ? WHERE id = ?').run(item.name, item.category, item.price, item.description, item.image, item.tag, id);
+    const result = database.prepare('UPDATE menu_items SET name = ?, category = ?, price = ?, description = ?, image = ?, tag = ?, stock = ?, sold_out = ? WHERE id = ?').run(item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0, id);
     if (!result.changes) throw httpError(404, 'Menu item not found.');
     json(response, 200, { item: getMenuItem(id) });
     return true;
@@ -420,6 +442,16 @@ function ensureOrderEmailColumn() {
   }
 }
 
+function ensureMenuItemStockColumns() {
+  const columns = database.prepare('PRAGMA table_info(menu_items)').all();
+  if (!columns.some(column => column.name === 'stock')) {
+    database.exec('ALTER TABLE menu_items ADD COLUMN stock INTEGER NOT NULL DEFAULT -1');
+  }
+  if (!columns.some(column => column.name === 'sold_out')) {
+    database.exec('ALTER TABLE menu_items ADD COLUMN sold_out INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
 function migrateMenuCategories() {
   database.exec('BEGIN IMMEDIATE');
   try {
@@ -459,7 +491,7 @@ function seedMenu() {
   ];
   database.exec('BEGIN IMMEDIATE');
   try {
-    const insertItem = database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const insertItem = database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag, stock, sold_out) VALUES (?, ?, ?, ?, ?, ?, ?, -1, 0)');
     for (const item of items) insertItem.run(...item);
     database.exec('COMMIT');
   } catch (error) {
@@ -488,12 +520,59 @@ function validateMenuItem(body, existingId = null) {
     price: Number(body.price),
     description: clean(body.description, 180),
     image: clean(body.image, 2_000),
-    tag: clean(body.tag, 50)
+    tag: clean(body.tag, 50),
+    stock: body.stock === null || body.stock === undefined || body.stock === '' ? -1 : Number(body.stock),
+    soldOut: Boolean(body.soldOut)
   };
   if (!item.id || !item.name || !item.category || !Number.isSafeInteger(item.price) || item.price < 0 || item.price > 1_000_000) throw httpError(400, 'Provide a valid dish ID, name, category, and whole-number price.');
   if (!item.category) throw httpError(400, 'Choose Dumplings, Noodles, Sauces, Tteokpokki, or Beverages.');
+  if (!Number.isSafeInteger(item.stock) || item.stock < -1 || item.stock > 100_000) throw httpError(400, 'Stock must be a whole number from 0 to 100000, or empty for unlimited.');
+  item.soldOut = item.soldOut || (item.stock === 0);
+  item.stock = item.soldOut && item.stock === -1 ? 0 : item.stock;
   if (item.image && !/^(https:\/\/|\/uploads\/)[^\s]+$/i.test(item.image)) throw httpError(400, 'Dish photos must use HTTPS or a server-uploaded image.');
   return item;
+}
+
+const WORKING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const defaultWorkingHours = WORKING_DAYS.map(day => ({ day, open: '11:00', close: '23:00', closed: false }));
+
+function validateWorkingHours(body) {
+  const source = Array.isArray(body?.hours) ? body.hours : Array.isArray(body) ? body : [];
+  const time = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim()) ? value.trim() : '';
+  const byDay = new Map(source.map(entry => [String(entry?.day || '').toLowerCase(), entry]));
+  return WORKING_DAYS.map(day => {
+    const entry = byDay.get(day) || {};
+    const open = time(entry.open) || '11:00';
+    const close = time(entry.close) || '23:00';
+    const closed = Boolean(entry.closed) || !time(entry.open) || !time(entry.close);
+    return { day, open, close, closed };
+  });
+}
+
+function getWorkingHours() {
+  const row = database.prepare("SELECT value FROM settings WHERE key = 'workingHours'").get();
+  if (!row) return defaultWorkingHours;
+  try { return validateWorkingHours(JSON.parse(row.value)); }
+  catch { return defaultWorkingHours; }
+}
+
+function cairoNow() {
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
+  const parts = Object.fromEntries(formatter.formatToParts(new Date()).map(part => [part.type, part.value]));
+  const hour = parts.hour === '24' ? 0 : Number(parts.hour);
+  return { day: parts.weekday.toLowerCase(), minutes: hour * 60 + Number(parts.minute) };
+}
+
+const toMinutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
+
+function assertWithinWorkingHours() {
+  const { day, minutes } = cairoNow();
+  const today = getWorkingHours().find(entry => entry.day === day);
+  if (!today || today.closed) throw httpError(423, 'The kitchen is closed right now. Check our working hours and try again later.');
+  const open = toMinutes(today.open);
+  const close = toMinutes(today.close);
+  const within = open <= close ? minutes >= open && minutes < close : minutes >= open || minutes < close;
+  if (!within) throw httpError(423, 'The kitchen is closed right now. Check our working hours and try again later.');
 }
 
 function validateOffer(body, existingId = null) {
@@ -513,11 +592,11 @@ function listCategories() {
 }
 
 function listMenuItems() {
-  return database.prepare('SELECT id, name, category, price, description, image, tag FROM menu_items ORDER BY rowid').all();
+  return database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut FROM menu_items ORDER BY rowid').all();
 }
 
 function getMenuItem(id) {
-  return database.prepare('SELECT id, name, category, price, description, image, tag FROM menu_items WHERE id = ?').get(id);
+  return database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut FROM menu_items WHERE id = ?').get(id);
 }
 
 function getOffer(id) {
@@ -581,12 +660,14 @@ function validateOrder(body) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     const id = typeof entry.id === 'string' ? entry.id : '';
     const quantity = Number(entry.quantity);
-    const menuItem = database.prepare('SELECT name, category, price FROM menu_items WHERE id = ?').get(id);
+    const menuItem = database.prepare('SELECT name, category, price, stock, sold_out AS soldOut FROM menu_items WHERE id = ?').get(id);
     if (!menuItem || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw httpError(400, 'One or more order items are invalid.');
+    if (menuItem.soldOut) throw httpError(409, `“${menuItem.name}” is sold out today.`);
+    if (menuItem.stock >= 0 && quantity > menuItem.stock) throw httpError(409, `Only ${menuItem.stock} left of “${menuItem.name}”.`);
     const style = typeof entry.style === 'string' ? entry.style : '';
     if (menuItem.category === 'Dumplings' && !dumplingStyles.includes(style)) throw httpError(400, `Choose a dumpling style: ${dumplingStyles.join(', ')}.`);
     if (menuItem.category !== 'Dumplings' && style) throw httpError(400, 'Only dumplings can have a preparation style.');
-    return { name: menuItem.name, category: menuItem.category, quantity, unitPrice: menuItem.price, lineTotal: quantity * menuItem.price, style };
+    return { id, name: menuItem.name, category: menuItem.category, quantity, unitPrice: menuItem.price, lineTotal: quantity * menuItem.price, style };
   });
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
   if (!Number.isSafeInteger(subtotal)) throw httpError(400, 'Order total is too large.');
