@@ -546,7 +546,13 @@ byId('account-signup').addEventListener('click', async () => {
 byId('cart-open').addEventListener('click', () => { renderCart(); setDrawer(true); });
 byId('cart-close').addEventListener('click', () => setDrawer(false));
 byId('drawer-scrim').addEventListener('click', () => setDrawer(false));
-byId('checkout-open').addEventListener('click', () => { byId('checkout-dialog').showModal(); });
+byId('checkout-open').addEventListener('click', () => {
+  if (!isKitchenOpen()) {
+    showToast("Sorry, we're closed right now. Check our working hours and come back soon!");
+    return;
+  }
+  byId('checkout-dialog').showModal();
+});
 byId('success-close').addEventListener('click', () => byId('success-dialog').close());
 byId('empty-menu-link').addEventListener('click', () => setDrawer(false));
 document.querySelectorAll('.dialog-close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
