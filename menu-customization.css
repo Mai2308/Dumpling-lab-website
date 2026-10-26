@@ -20,6 +20,20 @@
   color: var(--ink, #211d19);
   font: inherit;
 }
+
+.dish-options {
+  display: grid;
+  gap: 0;
+  margin: 0 0 15px;
+}
+
+.dish-options .field-unit {
+  display: inline-block;
+}
+
+.dish-options textarea {
+  resize: vertical;
+}
 .stock-fields{display:grid;grid-template-columns:1fr;gap:0;margin:0 0 15px}
 .stock-fields>label{display:block;margin:0 0 15px;color:#665e53;font-size:10px;font-weight:600}
 .sold-out-option{margin-bottom:0}

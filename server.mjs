@@ -46,7 +46,9 @@ database.exec(`
     image TEXT NOT NULL DEFAULT '',
     tag TEXT NOT NULL DEFAULT '',
     stock INTEGER NOT NULL DEFAULT -1,
-    sold_out INTEGER NOT NULL DEFAULT 0
+    sold_out INTEGER NOT NULL DEFAULT 0,
+    option_label TEXT NOT NULL DEFAULT '',
+    option_choices TEXT NOT NULL DEFAULT '[]'
   );
   CREATE TABLE IF NOT EXISTS offers (
     id TEXT PRIMARY KEY,
@@ -87,6 +89,7 @@ database.exec(`
 ensureOrderItemStyleColumn();
 ensureOrderEmailColumn();
 ensureMenuItemStockColumns();
+ensureMenuItemOptionsColumns();
 migrateMenuCategories();
 seedMenu();
 await bootstrapAdmin();
@@ -259,7 +262,7 @@ async function handleApi(request, response, url) {
     verifyAdmin(request);
     const item = validateMenuItem(await readBody(request));
     try {
-      database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag, stock, sold_out) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(item.id, item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0);
+      database.prepare('INSERT INTO menu_items (id, name, category, price, description, image, tag, stock, sold_out, option_label, option_choices) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(item.id, item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0, item.options?.label || '', JSON.stringify(item.options?.choices || []));
     } catch (error) {
       if (String(error.message).includes('UNIQUE')) throw httpError(409, 'That menu item ID already exists.');
       throw error;
@@ -278,7 +281,7 @@ async function handleApi(request, response, url) {
       return true;
     }
     const item = validateMenuItem(await readBody(request), id);
-    const result = database.prepare('UPDATE menu_items SET name = ?, category = ?, price = ?, description = ?, image = ?, tag = ?, stock = ?, sold_out = ? WHERE id = ?').run(item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0, id);
+    const result = database.prepare('UPDATE menu_items SET name = ?, category = ?, price = ?, description = ?, image = ?, tag = ?, stock = ?, sold_out = ?, option_label = ?, option_choices = ? WHERE id = ?').run(item.name, item.category, item.price, item.description, item.image, item.tag, item.stock, item.soldOut ? 1 : 0, item.options?.label || '', JSON.stringify(item.options?.choices || []), id);
     if (!result.changes) throw httpError(404, 'Menu item not found.');
     json(response, 200, { item: getMenuItem(id) });
     return true;
@@ -452,6 +455,16 @@ function ensureMenuItemStockColumns() {
   }
 }
 
+function ensureMenuItemOptionsColumns() {
+  const columns = database.prepare('PRAGMA table_info(menu_items)').all();
+  if (!columns.some(column => column.name === 'option_label')) {
+    database.exec("ALTER TABLE menu_items ADD COLUMN option_label TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.some(column => column.name === 'option_choices')) {
+    database.exec("ALTER TABLE menu_items ADD COLUMN option_choices TEXT NOT NULL DEFAULT '[]'");
+  }
+}
+
 function migrateMenuCategories() {
   database.exec('BEGIN IMMEDIATE');
   try {
@@ -522,7 +535,8 @@ function validateMenuItem(body, existingId = null) {
     image: clean(body.image, 2_000),
     tag: clean(body.tag, 50),
     stock: body.stock === null || body.stock === undefined || body.stock === '' ? -1 : Number(body.stock),
-    soldOut: Boolean(body.soldOut)
+    soldOut: Boolean(body.soldOut),
+    options: validateItemOptions(body.options, Number(body.price))
   };
   if (!item.id || !item.name || !item.category || !Number.isSafeInteger(item.price) || item.price < 0 || item.price > 1_000_000) throw httpError(400, 'Provide a valid dish ID, name, category, and whole-number price.');
   if (!item.category) throw httpError(400, 'Choose Dumplings, Noodles, Sauces, Tteokpokki, or Beverages.');
@@ -531,6 +545,32 @@ function validateMenuItem(body, existingId = null) {
   item.stock = item.soldOut && item.stock === -1 ? 0 : item.stock;
   if (item.image && !/^(https:\/\/|\/uploads\/)[^\s]+$/i.test(item.image)) throw httpError(400, 'Dish photos must use HTTPS or a server-uploaded image.');
   return item;
+}
+
+function validateItemOptions(value, basePrice) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.choices)) {
+    throw httpError(400, 'Provide a dropdown label and a list of choices.');
+  }
+  const label = typeof value.label === 'string' ? value.label.trim() : '';
+  const choices = value.choices.map(choice => {
+    if (typeof choice === 'string') return { name: choice.trim(), priceChange: 0 };
+    if (!choice || typeof choice !== 'object' || Array.isArray(choice)) return { name: '', priceChange: NaN };
+    return {
+      name: typeof choice.name === 'string' ? choice.name.trim() : '',
+      priceChange: choice.priceChange === undefined ? 0 : choice.priceChange
+    };
+  });
+  if (label.length > 60 || choices.some(choice => choice.name.length > 40)) {
+    throw httpError(400, 'Dropdown labels are limited to 60 characters and choices to 40 characters.');
+  }
+  if (!label || choices.length < 1 || choices.length > 12 || choices.some(choice => !choice.name || !Number.isSafeInteger(choice.priceChange) || basePrice + choice.priceChange < 0 || basePrice + choice.priceChange > 1_000_000)) {
+    throw httpError(400, 'A dropdown needs a label and 1 to 12 named choices with valid price changes.');
+  }
+  if (new Set(choices.map(choice => choice.name.toLowerCase())).size !== choices.length) {
+    throw httpError(400, 'Dropdown choices must be unique.');
+  }
+  return { label, choices };
 }
 
 const WORKING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -592,11 +632,18 @@ function listCategories() {
 }
 
 function listMenuItems() {
-  return database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut FROM menu_items ORDER BY rowid').all();
+  return database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut, option_label, option_choices FROM menu_items ORDER BY rowid').all().map(withMenuOptions);
 }
 
 function getMenuItem(id) {
-  return database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut FROM menu_items WHERE id = ?').get(id);
+  const item = database.prepare('SELECT id, name, category, price, description, image, tag, stock, sold_out AS soldOut, option_label, option_choices FROM menu_items WHERE id = ?').get(id);
+  return item ? withMenuOptions(item) : null;
+}
+
+function withMenuOptions(item) {
+  const { option_label: label, option_choices: encodedChoices, ...menuItem } = item;
+  const choices = JSON.parse(encodedChoices);
+  return { ...menuItem, options: label && choices.length ? { label, choices } : null };
 }
 
 function getOffer(id) {
@@ -660,14 +707,20 @@ function validateOrder(body) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     const id = typeof entry.id === 'string' ? entry.id : '';
     const quantity = Number(entry.quantity);
-    const menuItem = database.prepare('SELECT name, category, price, stock, sold_out AS soldOut FROM menu_items WHERE id = ?').get(id);
+    const menuItem = database.prepare('SELECT name, category, price, stock, sold_out AS soldOut, option_label, option_choices FROM menu_items WHERE id = ?').get(id);
     if (!menuItem || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw httpError(400, 'One or more order items are invalid.');
     if (menuItem.soldOut) throw httpError(409, `“${menuItem.name}” is sold out today.`);
     if (menuItem.stock >= 0 && quantity > menuItem.stock) throw httpError(409, `Only ${menuItem.stock} left of “${menuItem.name}”.`);
     const style = typeof entry.style === 'string' ? entry.style : '';
-    if (menuItem.category === 'Dumplings' && !dumplingStyles.includes(style)) throw httpError(400, `Choose a dumpling style: ${dumplingStyles.join(', ')}.`);
-    if (menuItem.category !== 'Dumplings' && style) throw httpError(400, 'Only dumplings can have a preparation style.');
-    return { id, name: menuItem.name, category: menuItem.category, quantity, unitPrice: menuItem.price, lineTotal: quantity * menuItem.price, style };
+    const customChoices = JSON.parse(menuItem.option_choices);
+    const choices = menuItem.option_label && customChoices.length
+      ? customChoices.map(choice => typeof choice === 'string' ? { name: choice, priceChange: 0 } : choice)
+      : menuItem.category === 'Dumplings' ? dumplingStyles.map(name => ({ name, priceChange: 0 })) : [];
+    const selectedChoice = choices.find(choice => choice.name === style);
+    if (choices.length && !selectedChoice) throw httpError(400, `Choose an option for “${menuItem.name}”.`);
+    if (!choices.length && style) throw httpError(400, `“${menuItem.name}” does not have an option to choose.`);
+    const unitPrice = menuItem.price + (selectedChoice?.priceChange || 0);
+    return { id, name: menuItem.name, category: menuItem.category, quantity, unitPrice, lineTotal: quantity * unitPrice, style };
   });
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
   if (!Number.isSafeInteger(subtotal)) throw httpError(400, 'Order total is too large.');

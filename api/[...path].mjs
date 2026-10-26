@@ -250,7 +250,8 @@ function validateMenuItem(body, existingId = null) {
     image: cleanText(body.image, 2_000),
     tag: cleanText(body.tag, 50),
     stock: body.stock === null || body.stock === undefined || body.stock === '' ? -1 : Number(body.stock),
-    soldOut: Boolean(body.soldOut)
+    soldOut: Boolean(body.soldOut),
+    options: validateItemOptions(body.options, Number(body.price))
   };
   if (!item.id || !item.name || !item.category || !Number.isSafeInteger(item.price) || item.price < 0 || item.price > 1_000_000) {
     throw httpError(400, 'Provide a valid dish ID, name, category, and whole-number price.');
@@ -260,6 +261,32 @@ function validateMenuItem(body, existingId = null) {
   item.stock = item.soldOut && item.stock === -1 ? 0 : item.stock;
   if (item.image && !/^https:\/\/[^\s]+$/i.test(item.image)) throw httpError(400, 'Dish photos must use HTTPS.');
   return item;
+}
+
+function validateItemOptions(value, basePrice) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.choices)) {
+    throw httpError(400, 'Provide a dropdown label and a list of choices.');
+  }
+  const label = typeof value.label === 'string' ? value.label.trim() : '';
+  const choices = value.choices.map(choice => {
+    if (typeof choice === 'string') return { name: choice.trim(), priceChange: 0 };
+    if (!choice || typeof choice !== 'object' || Array.isArray(choice)) return { name: '', priceChange: NaN };
+    return {
+      name: typeof choice.name === 'string' ? choice.name.trim() : '',
+      priceChange: choice.priceChange === undefined ? 0 : choice.priceChange
+    };
+  });
+  if (label.length > 60 || choices.some(choice => choice.name.length > 40)) {
+    throw httpError(400, 'Dropdown labels are limited to 60 characters and choices to 40 characters.');
+  }
+  if (!label || choices.length < 1 || choices.length > 12 || choices.some(choice => !choice.name || !Number.isSafeInteger(choice.priceChange) || basePrice + choice.priceChange < 0 || basePrice + choice.priceChange > 1_000_000)) {
+    throw httpError(400, 'A dropdown needs a label and 1 to 12 named choices with valid price changes.');
+  }
+  if (new Set(choices.map(choice => choice.name.toLowerCase())).size !== choices.length) {
+    throw httpError(400, 'Dropdown choices must be unique.');
+  }
+  return { label, choices };
 }
 
 function validateOffer(body, existingId = null) {
@@ -287,22 +314,28 @@ async function validateOrder(body, menu) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     return { id: typeof entry.id === 'string' ? entry.id : '', quantity: Number(entry.quantity), style: typeof entry.style === 'string' ? entry.style : '' };
   });
-  const menuItems = await menu.find({ id: { $in: submittedItems.map(item => item.id) } }, { projection: { _id: 0, id: 1, name: 1, category: 1, price: 1, stock: 1, soldOut: 1 } }).toArray();
+  const menuItems = await menu.find({ id: { $in: submittedItems.map(item => item.id) } }, { projection: { _id: 0, id: 1, name: 1, category: 1, price: 1, stock: 1, soldOut: 1, options: 1 } }).toArray();
   const menuById = new Map(menuItems.map(item => [item.id, item]));
   const items = submittedItems.map(entry => {
     const menuItem = menuById.get(entry.id);
     if (!menuItem || !Number.isInteger(entry.quantity) || entry.quantity < 1 || entry.quantity > 99) throw httpError(400, 'One or more order items are invalid.');
     if (menuItem.soldOut) throw httpError(409, `“${menuItem.name}” is sold out today.`);
     if (Number.isInteger(menuItem.stock) && menuItem.stock >= 0 && entry.quantity > menuItem.stock) throw httpError(409, `Only ${menuItem.stock} left of “${menuItem.name}”.`);
-    if (menuItem.category === 'Dumplings' && !dumplingStyles.includes(entry.style)) throw httpError(400, `Choose a dumpling style: ${dumplingStyles.join(', ')}.`);
-    if (menuItem.category !== 'Dumplings' && entry.style) throw httpError(400, 'Only dumplings can have a preparation style.');
+    const customChoices = Array.isArray(menuItem.options?.choices) ? menuItem.options.choices : [];
+    const choices = customChoices.length
+      ? customChoices.map(choice => typeof choice === 'string' ? { name: choice, priceChange: 0 } : choice)
+      : menuItem.category === 'Dumplings' ? dumplingStyles.map(name => ({ name, priceChange: 0 })) : [];
+    const selectedChoice = choices.find(choice => choice.name === entry.style);
+    if (choices.length && !selectedChoice) throw httpError(400, `Choose an option for “${menuItem.name}”.`);
+    if (!choices.length && entry.style) throw httpError(400, `“${menuItem.name}” does not have an option to choose.`);
+    const unitPrice = menuItem.price + (selectedChoice?.priceChange || 0);
     return {
       id: entry.id,
       name: menuItem.name,
       category: menuItem.category,
       quantity: entry.quantity,
-      unitPrice: menuItem.price,
-      lineTotal: entry.quantity * menuItem.price,
+      unitPrice,
+      lineTotal: entry.quantity * unitPrice,
       style: entry.style
     };
   });

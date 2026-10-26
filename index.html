@@ -56,6 +56,10 @@
       <label>Price <span class="field-unit">EGP</span><input name="price" type="number" min="1" step="1" required placeholder="180"></label>
       <label>Description<textarea name="description" maxlength="180" rows="3" placeholder="A little about what's folded inside..."></textarea></label>
       <label>Photo caption <span class="field-unit">e.g. House favourite</span><input name="tag" maxlength="50" placeholder="The little note on the photo"></label>
+      <div class="dish-options">
+        <label>Dropdown label<input name="optionLabel" maxlength="60" placeholder="e.g. Choose a size"></label>
+        <label>Dropdown choices <span class="field-unit">one per line: choice | price change (EGP)</span><textarea name="optionChoices" maxlength="900" rows="4" placeholder="Small | 0&#10;Large | 30"></textarea></label>
+      </div>
       <div class="stock-fields"><label>Stock <span class="field-unit">empty = unlimited</span><input name="stock" type="number" min="0" max="100000" step="1" placeholder="e.g. 20"></label><label class="payment-option sold-out-option"><input name="soldOut" type="checkbox"><span><strong>Sold out</strong><small>Customers can't order this right now</small></span><span class="radio-mark"></span></label></div>
       <label>Image URL<input name="image" type="url" placeholder="https://..."></label>
       <label class="upload-label">Or choose a photo<input name="imageFile" type="file" accept="image/*"></label>

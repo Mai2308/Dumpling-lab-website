@@ -199,30 +199,52 @@ function renderMenu() {
   byId('product-grid').innerHTML = visibleItems.map(item => {
     const soldOut = Boolean(item.soldOut) || (Number.isInteger(item.stock) && item.stock === 0);
     const stockNote = state.managing && isAdmin() && Number.isInteger(item.stock) && item.stock >= 0 ? `<span class="stock-note">${soldOut ? 'Sold out' : `${item.stock} in stock`}</span>` : '';
-    const stylePicker = item.category === 'Dumplings' && !soldOut ? `<label class="style-choice">How would you like it?<select data-style="${escapeHTML(item.id)}" aria-label="Choose a style for ${escapeHTML(item.name)}">${dumplingStyles.map(style => `<option value="${escapeHTML(style)}">${escapeHTML(style)}</option>`).join('')}</select></label>` : '';
+    const dropdown = getItemDropdown(item);
+    const optionPicker = dropdown && !soldOut ? `<label class="style-choice">${escapeHTML(dropdown.label)}<select data-option="${escapeHTML(item.id)}" aria-label="${escapeHTML(dropdown.label)} for ${escapeHTML(item.name)}">${item.options ? '<option value="" selected disabled>Select an option</option>' : ''}${dropdown.choices.map(choice => `<option value="${escapeHTML(choice.name)}">${escapeHTML(choice.name)}${choice.priceChange ? ` (${choice.priceChange > 0 ? '+' : '−'}${money(Math.abs(choice.priceChange))})` : ''}</option>`).join('')}</select></label>` : '';
     const addButton = soldOut ? `<span class="sold-out-badge">Sold out</span>` : `<button class="add-to-bag" type="button" data-add="${escapeHTML(item.id)}" aria-label="Add ${escapeHTML(item.name)} to bag">+</button>`;
-    return `<article class="product-card ${soldOut ? 'is-sold-out' : ''}"><div class="product-image-wrap"><img class="product-image" src="${escapeHTML(item.image || fallbackImage)}" alt="${escapeHTML(item.name)} dumplings" loading="lazy"><span class="product-tag">${escapeHTML(item.tag || item.category)}</span>${state.managing && isAdmin() ? `<div class="card-manage"><button type="button" data-edit="${escapeHTML(item.id)}" aria-label="Edit ${escapeHTML(item.name)}" title="Edit dish">✎</button><button type="button" data-delete="${escapeHTML(item.id)}" aria-label="Remove ${escapeHTML(item.name)}" title="Remove dish">×</button></div>` : ''}</div><div class="product-info"><div class="product-title-row"><h3 class="product-title">${escapeHTML(item.name)}</h3><span class="product-price">${money(item.price)}</span></div><p class="product-description">${escapeHTML(item.description || '')}</p><div class="product-bottom"><span class="product-category">${escapeHTML(item.category)}</span>${stockNote}${stylePicker}${addButton}</div></div></article>`;
+    return `<article class="product-card ${soldOut ? 'is-sold-out' : ''}"><div class="product-image-wrap"><img class="product-image" src="${escapeHTML(item.image || fallbackImage)}" alt="${escapeHTML(item.name)} dumplings" loading="lazy"><span class="product-tag">${escapeHTML(item.tag || item.category)}</span>${state.managing && isAdmin() ? `<div class="card-manage"><button type="button" data-edit="${escapeHTML(item.id)}" aria-label="Edit ${escapeHTML(item.name)}" title="Edit dish">✎</button><button type="button" data-delete="${escapeHTML(item.id)}" aria-label="Remove ${escapeHTML(item.name)}" title="Remove dish">×</button></div>` : ''}</div><div class="product-info"><div class="product-title-row"><h3 class="product-title">${escapeHTML(item.name)}</h3><span class="product-price">${money(item.price)}</span></div><p class="product-description">${escapeHTML(item.description || '')}</p><div class="product-bottom"><span class="product-category">${escapeHTML(item.category)}</span>${stockNote}${optionPicker}${addButton}</div></div></article>`;
   }).join('');
   byId('product-grid').querySelectorAll('.product-image').forEach(image => image.addEventListener('error', () => { if (image.src !== fallbackImage) image.src = fallbackImage; }, { once: true }));
   byId('product-grid').querySelectorAll('[data-add]').forEach(button => button.addEventListener('click', () => {
-    const style = byId('product-grid').querySelector(`[data-style="${CSS.escape(button.dataset.add)}"]`)?.value || '';
+    const optionSelect = byId('product-grid').querySelector(`[data-option="${CSS.escape(button.dataset.add)}"]`);
+    const style = optionSelect?.value || '';
+    if (optionSelect && !style) { showToast(`Choose an option for ${state.items.find(item => item.id === button.dataset.add)?.name || 'this dish'} first.`); return; }
     addToCart(button.dataset.add, style);
   }));
   byId('product-grid').querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => openItemDialog(button.dataset.edit)));
   byId('product-grid').querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', () => removeItem(button.dataset.delete)));
 }
 
+function getItemDropdown(item) {
+  if (item.options?.label && item.options.choices?.length) {
+    return {
+      label: item.options.label,
+      choices: item.options.choices.map(choice => typeof choice === 'string' ? { name: choice, priceChange: 0 } : choice)
+    };
+  }
+  return item.category === 'Dumplings' ? { label: 'How would you like it?', choices: dumplingStyles.map(name => ({ name, priceChange: 0 })) } : null;
+}
+
+function getOptionPrice(item, selection) {
+  const choice = getItemDropdown(item)?.choices.find(entry => entry.name === selection);
+  return item.price + (choice?.priceChange || 0);
+}
+
 function getCartSelection(key) {
   const separatorIndex = key.indexOf('::');
   return separatorIndex < 0
     ? { id: key, style: '' }
-    : { id: key.slice(0, separatorIndex), style: key.slice(separatorIndex + 2) };
+    : { id: key.slice(0, separatorIndex), style: decodeURIComponent(key.slice(separatorIndex + 2)) };
 }
 
 function renderCart() {
   const entries = Object.entries(state.cart).filter(([, quantity]) => quantity > 0);
   const count = entries.reduce((total, [, quantity]) => total + quantity, 0);
-  const subtotal = entries.reduce((total, [key, quantity]) => total + (state.items.find(item => item.id === getCartSelection(key).id)?.price ?? 0) * quantity, 0);
+  const subtotal = entries.reduce((total, [key, quantity]) => {
+    const { id, style } = getCartSelection(key);
+    const item = state.items.find(entry => entry.id === id);
+    return total + (item ? getOptionPrice(item, style) : 0) * quantity;
+  }, 0);
   byId('cart-count').textContent = count;
   byId('drawer-count').textContent = `(${count})`;
   byId('cart-subtotal').textContent = money(subtotal);
@@ -233,7 +255,8 @@ function renderCart() {
     const { id, style } = getCartSelection(key);
     const item = state.items.find(entry => entry.id === id);
     if (!item) return '';
-    return `<article class="cart-line"><img src="${escapeHTML(item.image || fallbackImage)}" alt=""><div><h3>${escapeHTML(item.name)}</h3>${style ? `<p>${escapeHTML(style)}</p>` : ''}<p>${money(item.price)}</p><div class="quantity-controls"><button type="button" data-cart-key="${escapeHTML(key)}" data-delta="-1" aria-label="Remove one ${escapeHTML(item.name)}">−</button><span>${quantity}</span><button type="button" data-cart-key="${escapeHTML(key)}" data-delta="1" aria-label="Add one ${escapeHTML(item.name)}">+</button></div></div><span class="line-total">${money(item.price * quantity)}</span></article>`;
+    const unitPrice = getOptionPrice(item, style);
+    return `<article class="cart-line"><img src="${escapeHTML(item.image || fallbackImage)}" alt=""><div><h3>${escapeHTML(item.name)}</h3>${style ? `<p>${escapeHTML(style)}</p>` : ''}<p>${money(unitPrice)}</p><div class="quantity-controls"><button type="button" data-cart-key="${escapeHTML(key)}" data-delta="-1" aria-label="Remove one ${escapeHTML(item.name)}">−</button><span>${quantity}</span><button type="button" data-cart-key="${escapeHTML(key)}" data-delta="1" aria-label="Add one ${escapeHTML(item.name)}">+</button></div></div><span class="line-total">${money(unitPrice * quantity)}</span></article>`;
   }).join('');
   byId('cart-lines').querySelectorAll('[data-cart-key]').forEach(button => button.addEventListener('click', () => {
     const selection = getCartSelection(button.dataset.cartKey);
@@ -253,7 +276,7 @@ function addToCart(id, style = '', delta = 1) {
     const inCart = Object.entries(state.cart).reduce((total, [key, quantity]) => total + (getCartSelection(key).id === id ? quantity : 0), 0);
     if (inCart + delta > stock) { showToast(stock === 0 ? 'Sorry, that dish is sold out right now.' : `Only ${item.stock} left of that one.`); return; }
   }
-  const key = style ? `${id}::${style}` : id;
+  const key = style ? `${id}::${encodeURIComponent(style)}` : id;
   state.cart[key] = Math.max(0, (state.cart[key] || 0) + delta);
   if (!state.cart[key]) delete state.cart[key];
   renderCart();
@@ -342,6 +365,13 @@ function openItemDialog(id = null) {
   form.elements.soldOut.checked = Boolean(item?.soldOut);
   form.elements.image.value = item?.image?.startsWith('data:') ? '' : item?.image ?? '';
   form.elements.imageFile.value = '';
+  const options = item?.options ?? (item?.category === 'Dumplings' ? { label: 'How would you like it?', choices: dumplingStyles } : null);
+  form.elements.optionLabel.value = options?.label ?? '';
+  form.elements.optionChoices.value = options?.choices.map(choice => {
+    const name = typeof choice === 'string' ? choice : choice.name;
+    const priceChange = typeof choice === 'string' ? 0 : choice.priceChange || 0;
+    return priceChange ? `${name} | ${priceChange}` : name;
+  }).join('\n') ?? '';
   byId('item-dialog-title').textContent = item ? 'Edit this dish' : 'Add a dish';
   setImagePreview(item?.image || '');
   byId('item-dialog').showModal();
@@ -361,6 +391,20 @@ byId('item-form').addEventListener('submit', async event => {
   const file = form.elements.imageFile.files[0];
   let image = form.elements.image.value.trim() || previous?.image || fallbackImage;
   try {
+    const optionLabel = form.elements.optionLabel.value.trim();
+    const optionChoices = form.elements.optionChoices.value.split(/\r?\n/).map(line => {
+      const separator = line.lastIndexOf('|');
+      const name = (separator < 0 ? line : line.slice(0, separator)).trim();
+      const priceText = separator < 0 ? '' : line.slice(separator + 1).trim();
+      if (!name && !priceText) return null;
+      if (priceText && !/^[+-]?\d+$/.test(priceText)) throw new Error(`Enter a whole-number price change for “${name || line.trim()}”.`);
+      return { name, priceChange: priceText ? Number(priceText) : 0 };
+    }).filter(Boolean);
+    if (Boolean(optionLabel) !== Boolean(optionChoices.length)) throw new Error('Enter both a dropdown label and at least one choice, or leave both fields blank.');
+    if (optionLabel.length > 60 || optionChoices.some(choice => choice.name.length > 40)) throw new Error('Dropdown labels can be up to 60 characters and choices up to 40 characters.');
+    if (optionChoices.length > 12) throw new Error('A dropdown can have up to 12 choices.');
+    if (new Set(optionChoices.map(choice => choice.name.toLowerCase())).size !== optionChoices.length) throw new Error('Dropdown choices must be unique.');
+    if (optionChoices.some(choice => !choice.name || !Number.isSafeInteger(choice.priceChange) || form.elements.price.valueAsNumber + choice.priceChange < 0 || form.elements.price.valueAsNumber + choice.priceChange > 1_000_000)) throw new Error('Each choice needs a name and a whole-number price change that keeps the final price between EGP 0 and EGP 1,000,000.');
     if (file) {
       const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -370,7 +414,7 @@ byId('item-form').addEventListener('submit', async event => {
       });
       image = (await apiRequest('/api/uploads', { method: 'POST', body: JSON.stringify({ dataUrl }) })).image;
     }
-    const item = { id, name: form.elements.name.value.trim(), category: form.elements.category.value, price: Number(form.elements.price.value), description: form.elements.description.value.trim(), image, tag: form.elements.tag.value.trim().toUpperCase() || previous?.tag || 'FOLDED FRESH', stock: form.elements.stock.value === '' ? -1 : Number(form.elements.stock.value), soldOut: form.elements.soldOut.checked };
+    const item = { id, name: form.elements.name.value.trim(), category: form.elements.category.value, price: Number(form.elements.price.value), description: form.elements.description.value.trim(), image, tag: form.elements.tag.value.trim().toUpperCase() || previous?.tag || 'FOLDED FRESH', stock: form.elements.stock.value === '' ? -1 : Number(form.elements.stock.value), soldOut: form.elements.soldOut.checked, options: optionLabel ? { label: optionLabel, choices: optionChoices } : null };
     const result = await apiRequest(previous ? `/api/menu/${encodeURIComponent(id)}` : '/api/menu', { method: previous ? 'PUT' : 'POST', body: JSON.stringify(item) });
     state.items = previous ? state.items.map(entry => entry.id === id ? result.item : entry) : [...state.items, result.item];
     byId('item-dialog').close(); renderMenu(); renderCart();
