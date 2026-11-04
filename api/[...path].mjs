@@ -466,7 +466,9 @@ async function uploadImageToCloudinary(dataUrl) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret) throw new Error('Cloudinary upload credentials are not configured.');
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw httpError(503, 'Dish photo uploads are not configured. Ask the administrator to configure Cloudinary, or add this dish without a photo.');
+  }
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const folder = 'dumpling-lab/menu';
   const signatureInput = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;

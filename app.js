@@ -437,6 +437,8 @@ function openItemDialog(id = null) {
   const form = byId('item-form');
   const item = state.items.find(entry => entry.id === id);
   form.reset();
+  byId('item-form-error').hidden = true;
+  byId('item-form-error').textContent = '';
   form.elements.id.value = item?.id ?? '';
   form.elements.name.value = item?.name ?? '';
   form.elements.category.innerHTML = state.categories.map(category => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`).join('');
@@ -469,11 +471,23 @@ function setImagePreview(source) {
 byId('item-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  const errorNotice = byId('item-form-error');
+  const submitButton = form.querySelector('[type="submit"]');
+  errorNotice.hidden = true;
+  errorNotice.textContent = '';
+  submitButton.disabled = true;
+  submitButton.firstChild.textContent = 'Saving dish ';
   const id = form.elements.id.value || `item-${crypto.randomUUID()}`;
   const previous = state.items.find(item => item.id === id);
   const file = form.elements.imageFile.files[0];
   let image = form.elements.image.value.trim() || previous?.image || fallbackImage;
   try {
+    if (file && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      throw new Error('Choose a JPEG, PNG, or WebP photo.');
+    }
+    if (file && file.size > 2_500_000) {
+      throw new Error('Choose a photo under 2.5 MB.');
+    }
     const optionLabel = form.elements.optionLabel.value.trim();
     const optionChoices = form.elements.optionChoices.value.split(/\r?\n/).map(line => {
       const separator = line.lastIndexOf('|');
@@ -502,7 +516,14 @@ byId('item-form').addEventListener('submit', async event => {
     state.items = previous ? state.items.map(entry => entry.id === id ? result.item : entry) : [...state.items, result.item];
     byId('item-dialog').close(); renderMenu(); renderCart();
     showToast(previous ? 'Your dish has been updated.' : 'A new dish joins the menu.');
-  } catch (error) { showToast(error.message); }
+  } catch (error) {
+    errorNotice.textContent = error.message || 'The dish could not be saved. Please try again.';
+    errorNotice.hidden = false;
+    errorNotice.scrollIntoView({ block: 'nearest' });
+  } finally {
+    submitButton.disabled = false;
+    submitButton.firstChild.textContent = 'Save dish ';
+  }
 });
 
 byId('add-item').addEventListener('click', () => openItemDialog());
@@ -696,7 +717,21 @@ byId('item-form').elements.image.addEventListener('input', event => setImagePrev
 byId('item-form').elements.imageFile.addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 2_500_000) { event.target.value = ''; showToast('Please choose an image under 2.5 MB.'); return; }
+  const errorNotice = byId('item-form-error');
+  errorNotice.hidden = true;
+  errorNotice.textContent = '';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    event.target.value = '';
+    errorNotice.textContent = 'Choose a JPEG, PNG, or WebP photo.';
+    errorNotice.hidden = false;
+    return;
+  }
+  if (file.size > 2_500_000) {
+    event.target.value = '';
+    errorNotice.textContent = 'Choose a photo under 2.5 MB.';
+    errorNotice.hidden = false;
+    return;
+  }
   setImagePreview(URL.createObjectURL(file));
 });
 byId('clear-image').addEventListener('click', () => { byId('item-form').elements.image.value = ''; byId('item-form').elements.imageFile.value = ''; setImagePreview(''); });
