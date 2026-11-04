@@ -36,6 +36,7 @@ function isAdmin() {
 function updateRoleControls() {
   byId('orders-open').hidden = !isAdmin();
   byId('manage-toggle').hidden = !isAdmin();
+  byId('hours-edit').hidden = !isAdmin();
   byId('checkout-settings-edit').hidden = !isAdmin();
 }
 
