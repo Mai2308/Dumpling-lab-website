@@ -7,7 +7,13 @@ const scrypt = promisify(scryptCallback);
 const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages'];
 const dumplingStyles = ['Steamed', 'Pan-fried', 'Crispy skirt'];
 const orderStatuses = ['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'];
-const paymentMethods = ['Cash on delivery', 'InstaPay'];
+const defaultCheckoutSettings = {
+  zones: [],
+  paymentMethods: [
+    { id: 'cash-on-delivery', name: 'Cash on delivery', instructions: '' },
+    { id: 'instapay', name: 'InstaPay', instructions: 'We’ll share transfer details after you order.' }
+  ]
+};
 const defaultMenu = [
   { id: 'item-1', name: 'Ginger cloud', category: 'Dumplings', price: 185, description: 'Chicken, fresh ginger, and a little spring onion tucked into soft, silky wrappers.', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=900&q=85', tag: 'HOUSE FAVOURITE' },
   { id: 'item-2', name: 'Golden crunch', category: 'Dumplings', price: 210, description: 'Crispy-bottomed parcels, juicy chicken, and sesame soy for dipping.', image: 'https://images.unsplash.com/photo-1562802378-063ec186a863?auto=format&fit=crop&w=900&q=85', tag: 'CRISPY LITTLE THING' },
@@ -219,6 +225,48 @@ async function getWorkingHours(db) {
   return validateWorkingHours(row.hours);
 }
 
+function validateCheckoutSettings(body) {
+  const sourceZones = Array.isArray(body.zones) ? body.zones : null;
+  const sourceMethods = Array.isArray(body.paymentMethods) ? body.paymentMethods : null;
+  if (!sourceZones || !sourceMethods || sourceZones.length > 100 || sourceMethods.length < 1 || sourceMethods.length > 20) {
+    throw httpError(400, 'Add up to 100 delivery areas and at least one payment method.');
+  }
+  const zones = sourceZones.map(zone => {
+    const id = typeof zone?.id === 'string' && /^[\w-]{1,80}$/.test(zone.id) ? zone.id : '';
+    const name = typeof zone?.name === 'string' ? zone.name.trim() : '';
+    const fee = Number(zone?.fee);
+    if (!id || !name || name.length > 60 || typeof zone.fee !== 'number' || !Number.isSafeInteger(fee) || fee < 0 || fee > 1_000_000) {
+      throw httpError(400, 'Each delivery area needs an ID, a name up to 60 characters, and a whole-number fee from EGP 0 to EGP 1,000,000.');
+    }
+    return { id, name, fee };
+  });
+  const paymentMethods = sourceMethods.map(method => {
+    const id = typeof method?.id === 'string' && /^[\w-]{1,80}$/.test(method.id) ? method.id : '';
+    const name = typeof method?.name === 'string' ? method.name.trim() : '';
+    const instructions = typeof method?.instructions === 'string' ? method.instructions.trim() : '';
+    if (!id || !name || name.length > 60 || instructions.length > 240) {
+      throw httpError(400, 'Each payment method needs a name up to 60 characters and instructions up to 240 characters.');
+    }
+    return { id, name, instructions };
+  });
+  for (const [entries, label] of [[zones, 'Delivery area'], [paymentMethods, 'Payment method']]) {
+    if (new Set(entries.map(entry => entry.id)).size !== entries.length
+      || new Set(entries.map(entry => entry.name.toLowerCase())).size !== entries.length) {
+      throw httpError(400, `${label} IDs and names must be unique.`);
+    }
+  }
+  return { zones, paymentMethods };
+}
+
+async function getCheckoutSettings(db, includeAll = true) {
+  const row = await db.collection('app_metadata').findOne({ _id: 'checkout-settings' });
+  const settings = row ? validateCheckoutSettings(row.settings) : defaultCheckoutSettings;
+  return {
+    zones: settings.zones,
+    paymentMethods: includeAll ? settings.paymentMethods : settings.paymentMethods.filter(method => method.active !== false)
+  };
+}
+
 function cairoNow() {
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
   const parts = Object.fromEntries(formatter.formatToParts(new Date()).map(part => [part.type, part.value]));
@@ -300,16 +348,19 @@ function validateOffer(body, existingId = null) {
   return { id, title, description, discountPercent, active: body.active };
 }
 
-async function validateOrder(body, menu) {
+async function validateOrder(body, menu, settings) {
   const customer = cleanText(body.customer, 70);
   const phone = cleanText(body.phone, 40);
   const email = cleanText(body.email, 254).toLowerCase();
   const address = cleanText(body.address, 240);
   if (!customer || !phone || !email || !address || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 40) {
-    throw httpError(400, 'Add your name, phone, email, address, and at least one item.');
+    throw httpError(400, 'Add your name, phone, email, delivery address, and at least one item.');
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw httpError(400, 'Enter a valid email address for order confirmation.');
-  if (!paymentMethods.includes(body.payment)) throw httpError(400, 'Choose cash on delivery or InstaPay.');
+  const zone = settings.zones.find(entry => entry.id === body.deliveryZone);
+  if (!zone) throw httpError(400, settings.zones.length ? 'Choose a valid delivery area.' : 'The restaurant has not configured any delivery areas yet.');
+  const paymentMethod = settings.paymentMethods.find(entry => entry.id === body.payment);
+  if (!paymentMethod) throw httpError(400, 'Choose one of the available payment methods.');
   const submittedItems = body.items.map(entry => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     return { id: typeof entry.id === 'string' ? entry.id : '', quantity: Number(entry.quantity), style: typeof entry.style === 'string' ? entry.style : '' };
@@ -340,8 +391,13 @@ async function validateOrder(body, menu) {
     };
   });
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
-  if (!Number.isSafeInteger(subtotal)) throw httpError(400, 'Order total is too large.');
-  return { customer, phone, email, address, payment: body.payment, items, subtotal };
+  const total = subtotal + zone.fee;
+  if (!Number.isSafeInteger(total)) throw httpError(400, 'Order total is too large.');
+  return {
+    customer, phone, email, address, payment: paymentMethod.name,
+    paymentInstructions: paymentMethod.instructions,
+    deliveryZone: zone.name, deliveryFee: zone.fee, items, subtotal, total
+  };
 }
 
 function publicDocument(document) {
@@ -357,17 +413,20 @@ function csvCell(value) {
 }
 
 function ordersCsv(orders) {
-  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Email', 'Phone', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Status', 'Restaurant notification']];
+  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Email', 'Phone', 'Delivery area', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Delivery fee (EGP)', 'Total (EGP)', 'Status', 'Restaurant notification']];
   for (const order of orders) rows.push([
     order.id,
     order.createdAt,
     order.customer,
     order.customerEmail || order.email || '',
     order.phone,
+    order.deliveryZone || '',
     order.address,
     order.items.map(item => `${item.quantity} x ${item.name} (${item.category}${item.style ? `, ${item.style}` : ''})`).join('; '),
     order.payment,
     order.subtotal,
+    order.deliveryFee || 0,
+    order.subtotal + (order.deliveryFee || 0),
     order.status,
     order.notificationStatus
   ]);
@@ -444,11 +503,12 @@ function getEmailTransporter() {
 
 function formatOrderSummary(order, mode) {
   const items = order.items.map(item => `${item.quantity} × ${item.name}${item.style ? ` (${item.style})` : ''}`).join('\n');
-  const total = `EGP ${Number(order.subtotal).toLocaleString('en-EG')}`;
+  const total = `EGP ${Number(order.subtotal + (order.deliveryFee || 0)).toLocaleString('en-EG')}`;
+  const paymentInstructions = order.paymentInstructions ? `\nPayment instructions: ${order.paymentInstructions}` : '';
   const subject = mode === 'customer' ? `Your Dumpling Lab order ${order.id} is confirmed` : `New Dumpling Lab order ${order.id}`;
   const text = mode === 'customer'
-    ? `Thanks for ordering from Dumpling Lab. Your order ${order.id} has been received and is being prepared.\n\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`
-    : `New order received for Dumpling Lab.\n\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`;
+    ? `Thanks for ordering from Dumpling Lab. Your order ${order.id} has been received and is being prepared.\n\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.deliveryZone}\nDelivery fee: EGP ${Number(order.deliveryFee).toLocaleString('en-EG')}\nPayment: ${order.payment}${paymentInstructions}\n\nItems:\n${items}\n\nTotal: ${total}`
+    : `New order received for Dumpling Lab.\n\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.deliveryZone}\nDelivery fee: EGP ${Number(order.deliveryFee).toLocaleString('en-EG')}\nPayment: ${order.payment}${paymentInstructions}\n\nItems:\n${items}\n\nTotal: ${total}`;
   return { subject, text };
 }
 
@@ -479,7 +539,7 @@ async function sendTelegramNotification(order) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: `📦 New Dumpling Lab order\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: EGP ${Number(order.subtotal).toLocaleString('en-EG')}`,
+      text: `📦 New Dumpling Lab order\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.deliveryZone}\nDelivery fee: EGP ${Number(order.deliveryFee).toLocaleString('en-EG')}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: EGP ${Number(order.subtotal + order.deliveryFee).toLocaleString('en-EG')}`,
       disable_web_page_preview: true
     }),
     signal: AbortSignal.timeout(4000)
@@ -590,6 +650,25 @@ async function handleApi(request, response, db, url) {
     return;
   }
 
+  if (pathname === '/api/checkout-settings' && method === 'GET') {
+    const includeAll = url.searchParams.get('all') === 'true';
+    if (includeAll) await verifyAdmin(request, users);
+    sendJson(response, 200, await getCheckoutSettings(db, includeAll));
+    return;
+  }
+
+  if (pathname === '/api/checkout-settings' && method === 'PUT') {
+    await verifyAdmin(request, users);
+    const settings = validateCheckoutSettings(body);
+    await db.collection('app_metadata').updateOne(
+      { _id: 'checkout-settings' },
+      { $set: { settings, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    sendJson(response, 200, settings);
+    return;
+  }
+
   if (pathname === '/api/uploads' && method === 'POST') {
     await verifyAdmin(request, users);
     const image = await uploadImageToCloudinary(body.dataUrl);
@@ -600,7 +679,8 @@ async function handleApi(request, response, db, url) {
   if (pathname === '/api/orders' && method === 'POST') {
     const hours = await getWorkingHours(db);
     assertWithinWorkingHours(hours);
-    const orderData = await validateOrder(body, menu);
+    const settings = await getCheckoutSettings(db);
+    const orderData = await validateOrder(body, menu, settings);
     const id = `DL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
     const notificationStatus = 'Inbox';
     const order = {

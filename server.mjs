@@ -13,6 +13,13 @@ const dataDirectory = resolve(process.env.DATA_DIRECTORY || resolve(root, 'data'
 const uploadDirectory = resolve(dataDirectory, 'uploads');
 const menuCategories = ['Dumplings', 'Noodles', 'Sauces', 'Tteokpokki', 'Beverages'];
 const dumplingStyles = ['Steamed', 'Pan-fried', 'Crispy skirt'];
+const defaultCheckoutSettings = {
+  zones: [],
+  paymentMethods: [
+    { id: 'cash-on-delivery', name: 'Cash on delivery', instructions: '' },
+    { id: 'instapay', name: 'InstaPay', instructions: 'We’ll share transfer details after you order.' }
+  ]
+};
 mkdirSync(uploadDirectory, { recursive: true });
 
 const jwtSecretPath = resolve(dataDirectory, 'jwt-secret');
@@ -63,7 +70,10 @@ database.exec(`
     phone TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL,
-    payment TEXT NOT NULL CHECK (payment IN ('Cash on delivery', 'InstaPay')),
+    payment TEXT NOT NULL,
+    payment_instructions TEXT NOT NULL DEFAULT '',
+    delivery_zone TEXT NOT NULL DEFAULT '',
+    delivery_fee INTEGER NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0),
     subtotal INTEGER NOT NULL CHECK (subtotal >= 0),
     status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled')),
     notification_status TEXT NOT NULL DEFAULT 'Inbox',
@@ -90,6 +100,7 @@ ensureOrderItemStyleColumn();
 ensureOrderEmailColumn();
 ensureMenuItemStockColumns();
 ensureMenuItemOptionsColumns();
+migrateCheckoutOrderColumns();
 migrateMenuCategories();
 seedMenu();
 await bootstrapAdmin();
@@ -166,6 +177,23 @@ async function handleApi(request, response, url) {
     json(response, 200, { hours });
     return true;
   }
+  if (pathname === '/api/checkout-settings' && method === 'GET') {
+    const includeAll = url.searchParams.get('all') === 'true';
+    if (includeAll) verifyAdmin(request);
+    const settings = getCheckoutSettings();
+    json(response, 200, {
+      zones: settings.zones,
+      paymentMethods: includeAll ? settings.paymentMethods : settings.paymentMethods.filter(method => method.active !== false)
+    });
+    return true;
+  }
+  if (pathname === '/api/checkout-settings' && method === 'PUT') {
+    verifyAdmin(request);
+    const settings = validateCheckoutSettings(await readBody(request));
+    database.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('checkoutSettings', JSON.stringify(settings));
+    json(response, 200, settings);
+    return true;
+  }
   if (pathname === '/api/uploads' && method === 'POST') {
     verifyAdmin(request);
     const body = await readBody(request, 3_600_000);
@@ -176,14 +204,14 @@ async function handleApi(request, response, url) {
 
   if (pathname === '/api/orders' && method === 'POST') {
     assertWithinWorkingHours();
-    const order = validateOrder(await readBody(request));
+    const order = validateOrder(await readBody(request), getCheckoutSettings());
     const id = `DL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
     const createdAt = new Date().toISOString();
-    const insertOrder = database.prepare('INSERT INTO orders (id, customer, phone, email, address, payment, subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertOrder = database.prepare('INSERT INTO orders (id, customer, phone, email, address, payment, payment_instructions, delivery_zone, delivery_fee, subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insertItem = database.prepare('INSERT INTO order_items (order_id, name, category, quantity, unit_price, line_total, style) VALUES (?, ?, ?, ?, ?, ?, ?)');
     database.exec('BEGIN IMMEDIATE');
     try {
-      insertOrder.run(id, order.customer, order.phone, order.email, order.address, order.payment, order.subtotal, createdAt);
+      insertOrder.run(id, order.customer, order.phone, order.email, order.address, order.payment, order.paymentInstructions, order.deliveryZone, order.deliveryFee, order.subtotal, createdAt);
       for (const item of order.items) {
         insertItem.run(id, item.name, item.category, item.quantity, item.unitPrice, item.lineTotal, item.style);
         database.prepare('UPDATE menu_items SET stock = MAX(stock - ?, 0), sold_out = CASE WHEN stock - ? <= 0 THEN 1 ELSE sold_out END WHERE id = ? AND stock >= 0').run(item.quantity, item.quantity, item.id);
@@ -445,6 +473,55 @@ function ensureOrderEmailColumn() {
   }
 }
 
+function migrateCheckoutOrderColumns() {
+  const schema = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'").get()?.sql || '';
+  const columns = database.prepare('PRAGMA table_info(orders)').all().map(column => column.name);
+  const needsMigration = schema.includes('CHECK (payment IN')
+    || !['payment_instructions', 'delivery_zone', 'delivery_fee'].every(column => columns.includes(column));
+  if (!needsMigration) return;
+
+  database.exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN IMMEDIATE;
+    CREATE TABLE orders_new (
+      id TEXT PRIMARY KEY,
+      customer TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL,
+      payment TEXT NOT NULL,
+      payment_instructions TEXT NOT NULL DEFAULT '',
+      delivery_zone TEXT NOT NULL DEFAULT '',
+      delivery_fee INTEGER NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0),
+      subtotal INTEGER NOT NULL CHECK (subtotal >= 0),
+      status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled')),
+      notification_status TEXT NOT NULL DEFAULT 'Inbox',
+      created_at TEXT NOT NULL
+    );
+    INSERT INTO orders_new (id, customer, phone, email, address, payment, subtotal, status, notification_status, created_at)
+      SELECT id, customer, phone, email, address, payment, subtotal, status, notification_status, created_at FROM orders;
+    CREATE TABLE order_items_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id TEXT NOT NULL REFERENCES orders_new(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+      line_total INTEGER NOT NULL CHECK (line_total >= 0),
+      style TEXT NOT NULL DEFAULT ''
+    );
+    INSERT INTO order_items_new (id, order_id, name, category, quantity, unit_price, line_total, style)
+      SELECT id, order_id, name, category, quantity, unit_price, line_total, style FROM order_items;
+    DROP TABLE order_items;
+    DROP TABLE orders;
+    ALTER TABLE orders_new RENAME TO orders;
+    ALTER TABLE order_items_new RENAME TO order_items;
+    CREATE INDEX IF NOT EXISTS orders_created_at_idx ON orders(created_at DESC);
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
 function ensureMenuItemStockColumns() {
   const columns = database.prepare('PRAGMA table_info(menu_items)').all();
   if (!columns.some(column => column.name === 'stock')) {
@@ -596,6 +673,44 @@ function getWorkingHours() {
   catch { return defaultWorkingHours; }
 }
 
+function validateCheckoutSettings(body) {
+  const sourceZones = Array.isArray(body.zones) ? body.zones : null;
+  const sourceMethods = Array.isArray(body.paymentMethods) ? body.paymentMethods : null;
+  if (!sourceZones || !sourceMethods || sourceZones.length > 100 || sourceMethods.length < 1 || sourceMethods.length > 20) {
+    throw httpError(400, 'Add up to 100 delivery areas and at least one payment method.');
+  }
+  const zones = sourceZones.map(zone => {
+    const id = typeof zone?.id === 'string' && /^[\w-]{1,80}$/.test(zone.id) ? zone.id : '';
+    const name = typeof zone?.name === 'string' ? zone.name.trim() : '';
+    const fee = Number(zone?.fee);
+    if (!id || !name || name.length > 60 || typeof zone.fee !== 'number' || !Number.isSafeInteger(fee) || fee < 0 || fee > 1_000_000) {
+      throw httpError(400, 'Each delivery area needs an ID, a name up to 60 characters, and a whole-number fee from EGP 0 to EGP 1,000,000.');
+    }
+    return { id, name, fee };
+  });
+  const paymentMethods = sourceMethods.map(method => {
+    const id = typeof method?.id === 'string' && /^[\w-]{1,80}$/.test(method.id) ? method.id : '';
+    const name = typeof method?.name === 'string' ? method.name.trim() : '';
+    const instructions = typeof method?.instructions === 'string' ? method.instructions.trim() : '';
+    if (!id || !name || name.length > 60 || instructions.length > 240) {
+      throw httpError(400, 'Each payment method needs a name up to 60 characters and instructions up to 240 characters.');
+    }
+    return { id, name, instructions };
+  });
+  for (const [entries, label] of [[zones, 'Delivery area'], [paymentMethods, 'Payment method']]) {
+    if (new Set(entries.map(entry => entry.id)).size !== entries.length
+      || new Set(entries.map(entry => entry.name.toLowerCase())).size !== entries.length) {
+      throw httpError(400, `${label} IDs and names must be unique.`);
+    }
+  }
+  return { zones, paymentMethods };
+}
+
+function getCheckoutSettings() {
+  const row = database.prepare("SELECT value FROM settings WHERE key = 'checkoutSettings'").get();
+  return row ? validateCheckoutSettings(JSON.parse(row.value)) : defaultCheckoutSettings;
+}
+
 function cairoNow() {
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
   const parts = Object.fromEntries(formatter.formatToParts(new Date()).map(part => [part.type, part.value]));
@@ -692,17 +807,20 @@ function readBody(request, maxBytes = 64_000) {
   });
 }
 
-function validateOrder(body) {
+function validateOrder(body, settings) {
   const cleanText = (value, limit) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
   const customer = cleanText(body.customer, 70);
   const phone = cleanText(body.phone, 40);
   const email = cleanText(body.email, 254).toLowerCase();
   const address = cleanText(body.address, 240);
   if (!customer || !phone || !email || !address || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 40) {
-    throw httpError(400, 'Add your name, phone, email, address, and at least one item.');
+    throw httpError(400, 'Add your name, phone, email, delivery address, and at least one item.');
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw httpError(400, 'Enter a valid email address for order confirmation.');
-  if (!['Cash on delivery', 'InstaPay'].includes(body.payment)) throw httpError(400, 'Choose cash on delivery or InstaPay.');
+  const zone = settings.zones.find(entry => entry.id === body.deliveryZone);
+  if (!zone) throw httpError(400, settings.zones.length ? 'Choose a valid delivery area.' : 'The restaurant has not configured any delivery areas yet.');
+  const paymentMethod = settings.paymentMethods.find(entry => entry.id === body.payment);
+  if (!paymentMethod) throw httpError(400, 'Choose one of the available payment methods.');
   const items = body.items.map(entry => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw httpError(400, 'One or more order items are invalid.');
     const id = typeof entry.id === 'string' ? entry.id : '';
@@ -723,15 +841,30 @@ function validateOrder(body) {
     return { id, name: menuItem.name, category: menuItem.category, quantity, unitPrice, lineTotal: quantity * unitPrice, style };
   });
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
-  if (!Number.isSafeInteger(subtotal)) throw httpError(400, 'Order total is too large.');
-  return { customer, phone, email, address, payment: body.payment, items, subtotal };
+  const total = subtotal + zone.fee;
+  if (!Number.isSafeInteger(total)) throw httpError(400, 'Order total is too large.');
+  return {
+    customer, phone, email, address, payment: paymentMethod.name,
+    paymentInstructions: paymentMethod.instructions,
+    deliveryZone: zone.name, deliveryFee: zone.fee, items, subtotal, total
+  };
 }
 
 function getOrder(id) {
   const order = database.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return null;
   const items = database.prepare('SELECT name, category, quantity, unit_price AS unitPrice, line_total AS lineTotal, style FROM order_items WHERE order_id = ? ORDER BY id').all(id);
-  return { ...order, createdAt: order.created_at, customerEmail: order.email || '', notificationStatus: order.notification_status, items };
+  return {
+    ...order,
+    paymentInstructions: order.payment_instructions,
+    deliveryZone: order.delivery_zone,
+    deliveryFee: order.delivery_fee,
+    total: order.subtotal + order.delivery_fee,
+    createdAt: order.created_at,
+    customerEmail: order.email || '',
+    notificationStatus: order.notification_status,
+    items
+  };
 }
 
 function listOrders() {
@@ -756,11 +889,12 @@ function getEmailTransporter() {
 
 function formatOrderSummary(order, mode) {
   const items = order.items.map(item => `${item.quantity} × ${item.name}${item.style ? ` (${item.style})` : ''}`).join('\n');
-  const total = `EGP ${Number(order.subtotal).toLocaleString('en-EG')}`;
+  const total = `EGP ${Number(order.subtotal + (order.delivery_fee || order.deliveryFee || 0)).toLocaleString('en-EG')}`;
   const subject = mode === 'customer' ? `Your Dumpling Lab order ${order.id} is confirmed` : `New Dumpling Lab order ${order.id}`;
+  const paymentInstructions = order.paymentInstructions || order.payment_instructions;
   const text = mode === 'customer'
-    ? `Thanks for ordering from Dumpling Lab. Your order ${order.id} has been received and is being prepared.\n\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`
-    : `New order received for Dumpling Lab.\n\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: ${total}`;
+    ? `Thanks for ordering from Dumpling Lab. Your order ${order.id} has been received and is being prepared.\n\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.delivery_zone || order.deliveryZone}\nDelivery fee: EGP ${Number(order.delivery_fee || order.deliveryFee || 0).toLocaleString('en-EG')}\nPayment: ${order.payment}${paymentInstructions ? `\nPayment instructions: ${paymentInstructions}` : ''}\n\nItems:\n${items}\n\nTotal: ${total}`
+    : `New order received for Dumpling Lab.\n\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.delivery_zone || order.deliveryZone}\nDelivery fee: EGP ${Number(order.delivery_fee || order.deliveryFee || 0).toLocaleString('en-EG')}\nPayment: ${order.payment}${paymentInstructions ? `\nPayment instructions: ${paymentInstructions}` : ''}\n\nItems:\n${items}\n\nTotal: ${total}`;
   return { subject, text };
 }
 
@@ -791,7 +925,7 @@ async function sendTelegramNotification(order) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: `📦 New Dumpling Lab order\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: EGP ${Number(order.subtotal).toLocaleString('en-EG')}`,
+      text: `📦 New Dumpling Lab order\nOrder ID: ${order.id}\nCustomer: ${order.customer}\nPhone: ${order.phone}\nEmail: ${order.email}\nAddress: ${order.address}\nDelivery area: ${order.delivery_zone || order.deliveryZone}\nDelivery fee: EGP ${Number(order.delivery_fee || order.deliveryFee || 0).toLocaleString('en-EG')}\nPayment: ${order.payment}\n\nItems:\n${items}\n\nTotal: EGP ${Number(order.subtotal + (order.delivery_fee || order.deliveryFee || 0)).toLocaleString('en-EG')}`,
       disable_web_page_preview: true
     })
   });
@@ -846,17 +980,20 @@ function csvCell(value) {
 }
 
 function ordersCSV(orders) {
-  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Email', 'Phone', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Status', 'Restaurant notification']];
+  const rows = [['Order ID', 'Placed at (UTC)', 'Customer', 'Email', 'Phone', 'Delivery area', 'Delivery address', 'Items', 'Payment method', 'Subtotal (EGP)', 'Delivery fee (EGP)', 'Total (EGP)', 'Status', 'Restaurant notification']];
   for (const order of orders) rows.push([
     order.id,
     order.createdAt,
     order.customer,
     order.customerEmail || order.email || '',
     order.phone,
+    order.deliveryZone || '',
     order.address,
     order.items.map(item => `${item.quantity} x ${item.name} (${item.category}${item.style ? `, ${item.style}` : ''})`).join('; '),
     order.payment,
     order.subtotal,
+    order.deliveryFee || 0,
+    order.subtotal + (order.deliveryFee || 0),
     order.status,
     order.notification_status
   ]);

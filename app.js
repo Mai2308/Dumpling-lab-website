@@ -18,6 +18,7 @@ const state = {
   hours: [],
   managing: false,
   offers: [],
+  checkoutSettings: { zones: [], paymentMethods: [] },
   authToken: sessionStorage.getItem(STORAGE_KEYS.authToken),
   user: null,
   orders: [],
@@ -35,6 +36,7 @@ function isAdmin() {
 function updateRoleControls() {
   byId('orders-open').hidden = !isAdmin();
   byId('manage-toggle').hidden = !isAdmin();
+  byId('checkout-settings-edit').hidden = !isAdmin();
 }
 
 function acceptAuth(result) {
@@ -45,6 +47,7 @@ function acceptAuth(result) {
   updateRoleControls();
   renderMenu();
   loadOffers().catch(error => showToast(error.message));
+  loadCheckoutSettings().catch(error => showToast(error.message));
 }
 
 function signOut(showConfirmation = true) {
@@ -61,6 +64,7 @@ function signOut(showConfirmation = true) {
   byId('orders-content').hidden = true;
   renderMenu();
   loadOffers().catch(error => showToast(error.message));
+  loadCheckoutSettings().catch(error => showToast(error.message));
   if (showConfirmation) showToast('You have signed out.');
 }
 
@@ -167,6 +171,82 @@ byId('hours-edit').addEventListener('click', () => {
   openHoursDialog();
 });
 
+function renderCheckoutSettings() {
+  const zoneSelect = byId('delivery-zone');
+  const selectedZoneId = zoneSelect.value;
+  zoneSelect.innerHTML = `<option value="">Choose your area</option>${state.checkoutSettings.zones.map(zone => `<option value="${escapeHTML(zone.id)}">${escapeHTML(zone.name)} · ${money(zone.fee)}</option>`).join('')}`;
+  if (state.checkoutSettings.zones.some(zone => zone.id === selectedZoneId)) zoneSelect.value = selectedZoneId;
+  byId('checkout-payment-options').innerHTML = state.checkoutSettings.paymentMethods.map((method, index) => `<label class="payment-option"><input name="payment" type="radio" value="${escapeHTML(method.id)}" ${index === 0 ? 'checked' : ''} required><span class="payment-icon">${index === 0 ? '١' : '↗'}</span><span><strong>${escapeHTML(method.name)}</strong>${method.instructions ? `<small>${escapeHTML(method.instructions)}</small>` : ''}</span><span class="radio-mark"></span></label>`).join('');
+  const notice = byId('checkout-settings-notice');
+  notice.hidden = state.checkoutSettings.zones.length > 0 && state.checkoutSettings.paymentMethods.length > 0;
+  notice.textContent = !state.checkoutSettings.zones.length
+    ? 'Delivery areas are not set up yet. Please check back soon.'
+    : 'Payment options are not set up yet. Please check back soon.';
+  renderCart();
+}
+
+async function loadCheckoutSettings() {
+  const result = await apiRequest(`/api/checkout-settings${isAdmin() ? '?all=true' : ''}`);
+  state.checkoutSettings = result;
+  renderCheckoutSettings();
+}
+
+function appendSettingRow(container, type, entry = {}) {
+  const row = document.createElement('div');
+  row.className = 'setting-row';
+  if (type === 'zone') {
+    row.innerHTML = `<input type="hidden" name="id" value="${escapeHTML(entry.id || `zone-${crypto.randomUUID()}`)}"><label>Area name<input name="name" required maxlength="60" value="${escapeHTML(entry.name || '')}" placeholder="e.g. Maadi"></label><label>Delivery fee <span class="field-unit">EGP</span><input name="fee" type="number" min="0" max="1000000" step="1" required value="${Number.isInteger(entry.fee) ? entry.fee : ''}" placeholder="0"></label><button class="remove-setting" type="button" aria-label="Remove delivery area">×</button>`;
+  } else {
+    row.innerHTML = `<input type="hidden" name="id" value="${escapeHTML(entry.id || `payment-${crypto.randomUUID()}`)}"><label>Method name<input name="name" required maxlength="60" value="${escapeHTML(entry.name || '')}" placeholder="e.g. Bank transfer"></label><label>Payment instructions <textarea name="instructions" maxlength="240" rows="2" placeholder="Optional instructions for the customer">${escapeHTML(entry.instructions || '')}</textarea></label><button class="remove-setting" type="button" aria-label="Remove payment method">×</button>`;
+  }
+  container.append(row);
+}
+
+function openCheckoutSettingsDialog() {
+  const zones = byId('delivery-zones-rows');
+  const methods = byId('payment-methods-rows');
+  zones.replaceChildren();
+  methods.replaceChildren();
+  state.checkoutSettings.zones.forEach(zone => appendSettingRow(zones, 'zone', zone));
+  state.checkoutSettings.paymentMethods.forEach(method => appendSettingRow(methods, 'payment', method));
+  byId('checkout-settings-dialog').showModal();
+}
+
+byId('checkout-settings-edit').addEventListener('click', async () => {
+  if (!isAdmin()) { byId('account-dialog').showModal(); return; }
+  try {
+    await loadCheckoutSettings();
+    openCheckoutSettingsDialog();
+  } catch (error) { showToast(error.message); }
+});
+byId('delivery-zone-add').addEventListener('click', () => appendSettingRow(byId('delivery-zones-rows'), 'zone'));
+byId('payment-method-add').addEventListener('click', () => appendSettingRow(byId('payment-methods-rows'), 'payment'));
+byId('checkout-settings-dialog').addEventListener('click', event => {
+  const remove = event.target.closest('.remove-setting');
+  if (remove) remove.closest('.setting-row').remove();
+});
+byId('checkout-settings-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const zones = [...byId('delivery-zones-rows').querySelectorAll('.setting-row')].map(row => ({
+    id: row.querySelector('[name=id]').value,
+    name: row.querySelector('[name=name]').value.trim(),
+    fee: Number(row.querySelector('[name=fee]').value)
+  }));
+  const paymentMethods = [...byId('payment-methods-rows').querySelectorAll('.setting-row')].map(row => ({
+    id: row.querySelector('[name=id]').value,
+    name: row.querySelector('[name=name]').value.trim(),
+    instructions: row.querySelector('[name=instructions]').value.trim()
+  }));
+  try {
+    const result = await apiRequest('/api/checkout-settings', { method: 'PUT', body: JSON.stringify({ zones, paymentMethods }) });
+    state.checkoutSettings = result;
+    byId('checkout-settings-dialog').close();
+    renderCheckoutSettings();
+    showToast('Delivery and payment settings saved.');
+  } catch (error) { showToast(error.message); }
+});
+
 async function loadOffers() {
   const result = await apiRequest(`/api/offers${isAdmin() ? '?all=true' : ''}`);
   state.offers = result.offers;
@@ -248,7 +328,10 @@ function renderCart() {
   byId('cart-count').textContent = count;
   byId('drawer-count').textContent = `(${count})`;
   byId('cart-subtotal').textContent = money(subtotal);
-  byId('checkout-total').textContent = money(subtotal);
+  const selectedZone = state.checkoutSettings.zones.find(zone => zone.id === byId('delivery-zone').value);
+  byId('checkout-subtotal').textContent = money(subtotal);
+  byId('checkout-delivery-fee').textContent = selectedZone ? money(selectedZone.fee) : 'Choose an area';
+  byId('checkout-total').textContent = money(subtotal + (selectedZone?.fee || 0));
   byId('cart-empty').hidden = count > 0;
   byId('cart-summary').hidden = count === 0;
   byId('cart-lines').innerHTML = entries.map(([key, quantity]) => {
@@ -265,7 +348,7 @@ function renderCart() {
 }
 
 function isItemAvailable(item) {
-  return item && !item.soldOut && !(Number.isInteger(item.stock) && item.stock <= 0);
+  return item && !item.soldOut && !(Number.isInteger(item.stock) && item.stock >= 0 && item.stock <= 0);
 }
 
 function addToCart(id, style = '', delta = 1) {
@@ -450,6 +533,10 @@ byId('checkout-form').addEventListener('submit', async event => {
   const form = event.currentTarget;
   const entries = Object.entries(state.cart).filter(([, quantity]) => quantity > 0);
   if (!entries.length) return;
+  if (!state.checkoutSettings.zones.length || !state.checkoutSettings.paymentMethods.length) {
+    showToast('Delivery and payment options are not available yet. Please check back soon.');
+    return;
+  }
   if (!isKitchenOpen()) {
     showToast('The kitchen is closed right now. Please come back during our working hours.');
     return;
@@ -462,6 +549,7 @@ byId('checkout-form').addEventListener('submit', async event => {
       customer: form.elements.customer.value.trim(),
       phone: form.elements.phone.value.trim(),
       email: form.elements.email.value.trim(),
+      deliveryZone: form.elements.deliveryZone.value,
       address: form.elements.address.value.trim(),
       payment: form.elements.payment.value,
       items: entries.map(([key, quantity]) => {
@@ -473,8 +561,10 @@ byId('checkout-form').addEventListener('submit', async event => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Your order could not be sent. Please try again.');
     const order = result.order;
-    byId('order-confirmation').textContent = `Order ${order.id} is in the kitchen for ${order.customer}. We’ll call ${order.phone} and email a confirmation to ${order.customerEmail || order.email || 'your inbox'} about the delivery details.`;
-    byId('instapay-details').hidden = order.payment !== 'InstaPay';
+    byId('order-confirmation').textContent = `Order ${order.id} is in the kitchen for ${order.customer}. Delivery to ${order.deliveryZone} costs ${money(order.deliveryFee)}; your total is ${money(order.total)}. We’ll call ${order.phone} and email a confirmation to ${order.customerEmail || order.email || 'your inbox'}.`;
+    byId('instapay-details').hidden = !order.paymentInstructions;
+    byId('instapay-details').querySelector('strong').textContent = `Pay with ${order.payment}`;
+    byId('instapay-details').querySelector('p').textContent = order.paymentInstructions || '';
     state.cart = {};
     form.reset(); renderCart();
     byId('checkout-dialog').close(); setDrawer(false); byId('success-dialog').showModal();
@@ -497,13 +587,13 @@ async function loadOrders() {
 
 function renderOrders() {
   const count = state.orders.length;
-  const earnings = state.orders.reduce((total, order) => total + (order.status === 'Cancelled' ? 0 : order.subtotal), 0);
+  const earnings = state.orders.reduce((total, order) => total + (order.status === 'Cancelled' ? 0 : (order.total ?? order.subtotal)), 0);
   const awaiting = state.orders.filter(order => order.status === 'New').length;
   byId('order-stat-count').textContent = count;
   byId('order-stat-earnings').textContent = money(earnings);
   byId('order-stat-new').textContent = awaiting;
   byId('orders-last-updated').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · refreshes every 20 seconds`;
-  byId('orders-list').innerHTML = count ? state.orders.map(order => `<article class="order-card"><div class="order-card-head"><div><span class="order-id">${escapeHTML(order.id)}</span><time>${new Date(order.createdAt).toLocaleString()}</time></div><strong>${money(order.subtotal)}</strong></div><div class="order-customer"><strong>${escapeHTML(order.customer)}</strong><a href="tel:${escapeHTML(order.phone)}">${escapeHTML(order.phone)}</a>${order.customerEmail ? `<a href="mailto:${escapeHTML(order.customerEmail)}">${escapeHTML(order.customerEmail)}</a>` : ''}<span>${escapeHTML(order.address)}</span></div><div class="order-items">${order.items.map(item => `<span>${item.quantity} × ${escapeHTML(item.name)}${item.style ? ` · ${escapeHTML(item.style)}` : ''}</span>`).join('')}<span class="order-payment">${escapeHTML(order.payment)}</span></div><div class="order-card-foot"><span class="notification-state">${escapeHTML(order.notification_status)}</span><label>Status<select data-order-status="${escapeHTML(order.id)}">${['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'].map(status => `<option${status === order.status ? ' selected' : ''}>${status}</option>`).join('')}</select></label></div></article>`).join('') : '<div class="orders-empty">No orders yet. New customer orders will appear here.</div>';
+  byId('orders-list').innerHTML = count ? state.orders.map(order => `<article class="order-card"><div class="order-card-head"><div><span class="order-id">${escapeHTML(order.id)}</span><time>${new Date(order.createdAt).toLocaleString()}</time></div><strong>${money(order.total ?? order.subtotal)}</strong></div><div class="order-customer"><strong>${escapeHTML(order.customer)}</strong><a href="tel:${escapeHTML(order.phone)}">${escapeHTML(order.phone)}</a>${order.customerEmail ? `<a href="mailto:${escapeHTML(order.customerEmail)}">${escapeHTML(order.customerEmail)}</a>` : ''}<span>${escapeHTML(order.deliveryZone || '')}${order.deliveryZone ? ` · ${money(order.deliveryFee || 0)} delivery` : ''}</span><span>${escapeHTML(order.address)}</span></div><div class="order-items">${order.items.map(item => `<span>${item.quantity} × ${escapeHTML(item.name)}${item.style ? ` · ${escapeHTML(item.style)}` : ''}</span>`).join('')}<span class="order-payment">${escapeHTML(order.payment)}</span></div><div class="order-card-foot"><span class="notification-state">${escapeHTML(order.notification_status)}</span><label>Status<select data-order-status="${escapeHTML(order.id)}">${['New', 'Preparing', 'Out for delivery', 'Completed', 'Cancelled'].map(status => `<option${status === order.status ? ' selected' : ''}>${status}</option>`).join('')}</select></label></div></article>`).join('') : '<div class="orders-empty">No orders yet. New customer orders will appear here.</div>';
   byId('orders-list').querySelectorAll('[data-order-status]').forEach(select => select.addEventListener('change', async () => {
     select.disabled = true;
     try {
@@ -595,8 +685,10 @@ byId('checkout-open').addEventListener('click', () => {
     showToast("Sorry, we're closed right now. Check our working hours and come back soon!");
     return;
   }
+  renderCheckoutSettings();
   byId('checkout-dialog').showModal();
 });
+byId('delivery-zone').addEventListener('change', renderCart);
 byId('success-close').addEventListener('click', () => byId('success-dialog').close());
 byId('empty-menu-link').addEventListener('click', () => setDrawer(false));
 document.querySelectorAll('.dialog-close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
@@ -627,6 +719,8 @@ async function initializeApp() {
   try { await loadHours(); }
   catch { /* hours notice stays hidden */ }
   try { await loadOffers(); }
+  catch (error) { showToast(error.message); }
+  try { await loadCheckoutSettings(); }
   catch (error) { showToast(error.message); }
   renderMenu();
   renderOffers();
