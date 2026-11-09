@@ -37,7 +37,8 @@
   .brand-wordmark{font-size:16px}
   .site-header{padding-left:12px;padding-right:12px}
   .header-actions{gap:8px}
-  .manage-button{font-size:0}
+  #orders-open,#manage-toggle{font-size:0}
+  #account-open{color:#f4e9df}
   .manage-button>span:first-child{font-size:12px}
   #manage-label{display:none}
   .hero-order-button{min-height:36px;padding:0 10px;gap:7px;font-size:9px}
